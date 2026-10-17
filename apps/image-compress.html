@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片压缩工具</title>
+<style>
+/* ============================================================
+   白色极简主题 — 纯白底 + 黑字 + 黑边框
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --panel-bg: #fafafa;
+  --text: #111111;
+  --text-light: #555555;
+  --border: #000000;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --success: #111111;
+  --danger: #cc0000;
+  --radius: 0px;
+  --font-mono: "Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace;
+  --font-sans: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans); background: var(--bg); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; background: var(--panel-bg);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.titlebar h1 { font-size: 1rem; font-weight: 600; }
+.titlebar-controls { display: flex; gap: 8px; }
+.btn {
+  padding: 6px 16px; border: 1px solid var(--border);
+  background: #fff; color: var(--text); font-size: 0.82rem;
+  cursor: pointer; font-family: inherit; transition: all 0.1s;
+}
+.btn:hover { background: var(--accent); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+.help-panel {
+  margin: 0; border-bottom: 1px solid var(--border);
+  background: #fff; flex-shrink: 0;
+}
+.help-panel summary {
+  padding: 8px 20px; cursor: pointer; font-size: 0.78rem;
+  font-weight: 600; color: var(--text-light); user-select: none;
+}
+.help-panel summary:hover { color: var(--text); }
+.help-content {
+  padding: 0 20px 14px; font-size: 0.78rem; color: var(--text-light);
+  line-height: 1.7;
+}
+.help-content h3 { font-size: 0.85rem; color: var(--text); margin: 8px 0 4px; }
+.help-content ul { padding-left: 18px; margin: 2px 0 6px; }
+.help-content kbd {
+  padding: 1px 6px; border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 0.72rem; background: #f5f5f5;
+}
+.main {
+  flex: 1; overflow-y: auto; padding: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+/* 拖拽区 */
+.dropzone {
+  border: 2px dashed var(--border); background: var(--panel-bg);
+  padding: 40px; text-align: center; cursor: pointer;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.dropzone:hover { background: #f0f0f0; }
+.dropzone .dz-icon { font-size: 2rem; margin-bottom: 8px; }
+.dropzone .dz-text { color: var(--text-light); font-size: 0.88rem; }
+.dropzone .dz-hint { font-size: 0.72rem; color: #999; margin-top: 4px; }
+/* 控制区 */
+.control-row {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px 16px; border: 1px solid var(--border); flex-shrink: 0;
+}
+.control-group { display: flex; align-items: center; gap: 6px; }
+.control-group label { font-size: 0.82rem; white-space: nowrap; font-weight: 600; }
+.control-group input[type=range] { width: 100px; accent-color: var(--accent); }
+.control-group input[type=number] {
+  width: 60px; padding: 2px 6px; border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 0.82rem; text-align: center;
+  background: #fff; color: var(--text);
+}
+.control-group input[type=number]:focus { outline: none; border-width: 2px; }
+.control-group select {
+  padding: 4px 8px; border: 1px solid var(--border);
+  font-size: 0.82rem; background: #fff; color: var(--text);
+}
+/* 预览区 */
+.preview-row {
+  display: flex; gap: 16px; flex: 1; min-height: 0; overflow: hidden;
+}
+.preview-col {
+  flex: 1; display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+}
+.preview-col label { font-size: 0.82rem; font-weight: 600; }
+.preview-box {
+  flex: 1; border: 1px solid var(--border); overflow: auto;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff;
+}
+.preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+/* 信息区 */
+.info-row {
+  display: flex; gap: 20px; padding: 10px 16px;
+  border: 1px solid var(--border); flex-shrink: 0; font-size: 0.82rem;
+}
+.info-item { display: flex; gap: 4px; }
+.info-item .label { color: var(--text-light); }
+.info-item .value { font-weight: 600; font-family: var(--font-mono); }
+.info-item .rate { color: var(--success); }
+/* 空状态 */
+.empty-state {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: #ccc; font-size: 0.9rem;
+}
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  padding: 8px 20px; background: var(--panel-bg); border: 1px solid var(--border);
+  font-size: 0.82rem; z-index: 999; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <h1>图片压缩工具</h1>
+  <div class="titlebar-controls">
+    <button class="btn btn-sm" onclick="compressNow()" title="预览压缩效果">预览压缩</button>
+    <button class="btn btn-sm" onclick="downloadResult()" title="下载压缩后的图片">下载图片</button>
+    <button class="btn btn-sm" onclick="resetAll()">清除</button>
+  </div>
+</div>
+
+<details class="help-panel" open>
+  <summary>使用说明</summary>
+  <div class="help-content">
+    <h3>图片压缩工具</h3>
+    <p>纯前端 Canvas 实现图片压缩，无需上传服务器，拖拽即可压缩。</p>
+    <h3>主要功能</h3>
+    <ul>
+      <li>拖拽或点击选择图片（支持 JPG / PNG / WebP）</li>
+      <li>质量滑块 1%-100% 实时调节，左右对比压缩前后效果</li>
+      <li>支持按比例缩放或自定义宽高尺寸</li>
+      <li>导出 JPEG / PNG / WebP 三种格式</li>
+    </ul>
+    <h3>步骤</h3>
+    <ul>
+      <li>拖入或选择图片 → 调节质量和尺寸 → 点击预览压缩 → 下载</li>
+    </ul>
+    <h3>提示</h3>
+    <ul>
+      <li>质量越低文件越小但画质越差，建议 60%-85% 兼顾体积和画质</li>
+      <li>WebP 格式在同等质量下通常比 JPEG 小 25%-35%</li>
+    </ul>
+  </div>
+</details>
+
+<div class="main">
+  <!-- 拖拽区 -->
+  <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+    <div class="dz-icon">&#128247;</div>
+    <div class="dz-text">拖拽图片到此处，或点击选择文件</div>
+    <div class="dz-hint">支持 JPG / PNG / WebP</div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(this.files[0])">
+  </div>
+
+  <!-- 控制区 -->
+  <div class="control-row" id="controls" style="display:none">
+    <div class="control-group">
+      <label>质量</label>
+      <input type="range" id="quality" min="1" max="100" value="75" oninput="updateQualityLabel()">
+      <span id="qualityLabel" style="font-family:var(--font-mono);font-size:0.82rem;min-width:32px">75%</span>
+    </div>
+    <div class="control-group">
+      <label>缩放</label>
+      <input type="number" id="scalePercent" value="100" min="1" max="500" onchange="onScaleChange()">
+      <span style="font-size:0.82rem">%</span>
+    </div>
+    <div class="control-group">
+      <label>宽</label>
+      <input type="number" id="customW" placeholder="自动" onchange="onCustomSize()">
+    </div>
+    <div class="control-group">
+      <label>高</label>
+      <input type="number" id="customH" placeholder="自动" onchange="onCustomSize()">
+    </div>
+    <div class="control-group">
+      <label>格式</label>
+      <select id="outFormat" onchange="compressNow()">
+        <option value="image/jpeg">JPEG</option>
+        <option value="image/png">PNG</option>
+        <option value="image/webp">WebP</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 预览对比 -->
+  <div class="preview-row" id="previewRow" style="display:none">
+    <div class="preview-col">
+      <label>原始图片</label>
+      <div class="preview-box"><img id="originalImg" alt="原始图片"></div>
+    </div>
+    <div class="preview-col">
+      <label>压缩预览</label>
+      <div class="preview-box"><img id="compressedImg" alt="压缩预览"></div>
+    </div>
+  </div>
+
+  <!-- 信息区 -->
+  <div class="info-row" id="infoRow" style="display:none">
+    <div class="info-item"><span class="label">原始大小：</span><span class="value" id="origSize">-</span></div>
+    <div class="info-item"><span class="label">压缩后：</span><span class="value" id="compSize">-</span></div>
+    <div class="info-item"><span class="label">压缩率：</span><span class="value rate" id="compRate">-</span></div>
+  </div>
+
+  <div class="empty-state" id="emptyState">请拖入或选择一张图片开始压缩</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let originalFile=null;
+let compressedBlob=null;
+
+// 拖拽支持
+const dz=document.getElementById("dropzone");
+let dragCounter=0;
+dz.addEventListener("dragover",e=>{ e.preventDefault(); });
+dz.addEventListener("dragenter",e=>{ e.preventDefault(); dragCounter++; dz.style.background="#f0f0f0"; });
+dz.addEventListener("dragleave",e=>{ dragCounter--; if(dragCounter===0) dz.style.background="#fafafa"; });
+dz.addEventListener("drop",e=>{
+  e.preventDefault(); dragCounter=0; dz.style.background="#fafafa";
+  const file=e.dataTransfer.files[0];
+  if(file&&file.type.startsWith("image/")) handleFile(file);
+});
+
+function handleFile(file){
+  if(!file||!file.type.startsWith("image/")){ toastMsg("请选择图片文件"); return; }
+  originalFile=file;
+  document.getElementById("origSize").textContent=formatSize(file.size);
+  document.getElementById("controls").style.display="flex";
+  document.getElementById("previewRow").style.display="flex";
+  document.getElementById("infoRow").style.display="flex";
+  document.getElementById("emptyState").style.display="none";
+  const reader=new FileReader();
+  reader.onload=e=>{ document.getElementById("originalImg").src=e.target.result; };
+  reader.readAsDataURL(file);
+  // 重置缩放
+  document.getElementById("scalePercent").value=100;
+  document.getElementById("customW").value="";
+  document.getElementById("customH").value="";
+  setTimeout(compressNow,200);
+}
+
+function compressNow(){
+  if(!originalFile) return;
+  const img=new Image();
+  const reader=new FileReader();
+  reader.onload=function(e){
+    img.onload=function(){
+      const quality=parseInt(document.getElementById("quality").value)/100;
+      const format=document.getElementById("outFormat").value;
+      let w=img.naturalWidth, h=img.naturalHeight;
+      const scale=parseInt(document.getElementById("scalePercent").value)||100;
+      const cw=parseInt(document.getElementById("customW").value);
+      const ch=parseInt(document.getElementById("customH").value);
+      if(cw>0&&ch>0){ w=cw; h=ch; }
+      else if(cw>0){ h=Math.round(h*(cw/img.naturalWidth)); w=cw; }
+      else if(ch>0){ w=Math.round(w*(ch/img.naturalHeight)); h=ch; }
+      else if(scale!==100){ w=Math.round(w*scale/100); h=Math.round(h*scale/100); }
+      const canvas=document.createElement("canvas");
+      canvas.width=w; canvas.height=h;
+      const ctx=canvas.getContext("2d");
+      ctx.drawImage(img,0,0,w,h);
+      canvas.toBlob(blob=>{
+        compressedBlob=blob;
+        const url=URL.createObjectURL(blob);
+        document.getElementById("compressedImg").src=url;
+        document.getElementById("compSize").textContent=formatSize(blob.size);
+        const rate=((1-blob.size/originalFile.size)*100).toFixed(1);
+        document.getElementById("compRate").textContent=rate>0?rate+"%":"0%";
+      },format,quality);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(originalFile);
+}
+
+function downloadResult(){
+  if(!compressedBlob) return;
+  const url=URL.createObjectURL(compressedBlob);
+  const ext=document.getElementById("outFormat").value.split("/")[1];
+  const a=document.createElement("a");
+  a.href=url; a.download="compressed."+ext; a.click();
+  URL.revokeObjectURL(url);
+  toastMsg("已开始下载");
+}
+
+function updateQualityLabel(){
+  document.getElementById("qualityLabel").textContent=document.getElementById("quality").value+"%";
+  compressNow();
+}
+
+function onScaleChange(){
+  document.getElementById("customW").value="";
+  document.getElementById("customH").value="";
+  compressNow();
+}
+
+function onCustomSize(){
+  document.getElementById("scalePercent").value="";
+  compressNow();
+}
+
+function resetAll(){
+  originalFile=null; compressedBlob=null;
+  document.getElementById("originalImg").src="";
+  document.getElementById("compressedImg").src="";
+  document.getElementById("controls").style.display="none";
+  document.getElementById("previewRow").style.display="none";
+  document.getElementById("infoRow").style.display="none";
+  document.getElementById("emptyState").style.display="flex";
+  document.getElementById("fileInput").value="";
+}
+
+function formatSize(bytes){
+  if(bytes<1024) return bytes+" B";
+  if(bytes<1048576) return (bytes/1024).toFixed(1)+" KB";
+  return (bytes/1048576).toFixed(2)+" MB";
+}
+
+function toastMsg(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._tid);
+  t._tid=setTimeout(()=>t.classList.remove("show"),1800);
+}
+
+document.getElementById("fileInput").addEventListener("change",e=>{
+  if(e.target.files[0]) handleFile(e.target.files[0]);
+});
+</script>
+</body>
+</html>

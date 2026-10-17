@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>进制转换器</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.input-row{display:flex;gap:0;align-items:stretch}
+.input-row select{padding:8px 12px;border:1px solid var(--border);border-right:none;background:var(--panel-bg);font-size:.85rem;font-family:inherit;color:var(--text);cursor:pointer}
+.input-row input{flex:1;padding:10px 14px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.9rem;background:#fff;color:var(--text);outline:none;min-width:0}
+.input-row input:focus{box-shadow:inset 0 0 0 2px var(--border)}
+.input-row input::placeholder{color:#bbb}
+.bit-row{display:flex;align-items:center;gap:8px}
+.bit-row label{font-size:.82rem;font-weight:600}
+.bit-row select{padding:4px 8px;border:1px solid var(--border);font-size:.82rem;background:#fff;color:var(--text);font-family:inherit}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.result-item{border:1px solid var(--border);padding:10px 14px}
+.result-item .key{font-size:.72rem;color:var(--text-light);margin-bottom:4px}
+.result-item .val{font-family:var(--font-mono);font-size:.85rem;word-break:break-all}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);font-size:.82rem;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>进制转换器</h1></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>进制转换器</h3>
+<p>在二进制、八进制、十进制、十六进制之间互相转换。支持负数和补零显示。</p>
+<ul><li>选择输入进制，输入数值，自动转换其他三种进制</li><li>支持负数（以补码形式显示）和浮点数</li><li><strong>位宽补零</strong>：选择8/16/32/64位宽，二进制和十六进制自动补零对齐</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="input-row">
+<select id="baseSelect" onchange="convert()">
+<option value="16">十六进制 (HEX)</option>
+<option value="10" selected>十进制 (DEC)</option>
+<option value="8">八进制 (OCT)</option>
+<option value="2">二进制 (BIN)</option>
+</select>
+<input id="numInput" placeholder="输入数值..." oninput="convert()">
+</div>
+<div class="bit-row">
+<label>位宽</label>
+<select id="bitWidth" onchange="convert()">
+<option value="0" selected>不补零</option>
+<option value="8">8 位</option>
+<option value="16">16 位</option>
+<option value="32">32 位</option>
+<option value="64">64 位</option>
+</select>
+</div>
+<div class="result-grid">
+<div class="result-item"><div class="key">二进制 (BIN)</div><div class="val" id="binOut">—</div></div>
+<div class="result-item"><div class="key">八进制 (OCT)</div><div class="val" id="octOut">—</div></div>
+<div class="result-item"><div class="key">十进制 (DEC)</div><div class="val" id="decOut">—</div></div>
+<div class="result-item"><div class="key">十六进制 (HEX)</div><div class="val" id="hexOut">—</div></div>
+</div>
+</div>
+<script>
+function padBits(s,base,bits){
+  if(bits===0||s==='—')return s;
+  let neg=s.startsWith('-');
+  if(neg)s=s.slice(1);
+  let groupBase=base===2?1:base===16?4:3;
+  let targetLen=Math.ceil(bits/groupBase);
+  if(s.length>=targetLen)return s;
+  return (neg?'-':'')+s.padStart(targetLen,'0');
+}
+
+function convert(){
+  let inp=document.getElementById('numInput').value.trim();
+  let base=parseInt(document.getElementById('baseSelect').value);
+  let bits=parseInt(document.getElementById('bitWidth').value);
+  if(!inp){clear();return}
+  // parseInt for integer bases
+  let val;
+  try{
+    if(base===10)val=parseFloat(inp);
+    else val=parseInt(inp,base);
+  }catch(e){clear();return}
+  if(isNaN(val)){clear();return}
+  let isNeg=val<0,absVal=Math.abs(val);
+  let intPart=Math.floor(absVal),fracPart=absVal-intPart;
+
+  let bin=intPart.toString(2),oct=intPart.toString(8),dec=intPart.toString(10),hex=intPart.toString(16).toUpperCase();
+
+  // Handle fractional part
+  if(fracPart>0&&Math.abs(fracPart)>1e-15){
+    let fBin='',fOct='',fHex='';
+    let f=fracPart;
+    for(let i=0;i<12;i++){f*=2;let d=Math.floor(f);fBin+=d;f-=d;}
+    f=fracPart;
+    for(let i=0;i<4;i++){f*=8;let d=Math.floor(f);fOct+=d;f-=d;}
+    f=fracPart;
+    for(let i=0;i<4;i++){f*=16;let d=Math.floor(f);fHex+=d.toString(16).toUpperCase();f-=d;}
+    bin+='.'+fBin;oct+='.'+fOct;dec=absVal.toString(10);hex+='.'+fHex;
+  }
+
+  if(isNeg&&intPart>0){bin='-'+bin;oct='-'+oct;dec='-'+dec;hex='-'+hex}
+
+  bin=padBits(bin,2,bits);oct=padBits(oct,8,bits);hex=padBits(hex,16,bits);
+
+  document.getElementById('binOut').textContent=bin;
+  document.getElementById('octOut').textContent=oct;
+  document.getElementById('decOut').textContent=dec;
+  document.getElementById('hexOut').textContent=hex;
+}
+
+function clear(){document.getElementById('binOut').textContent='—';document.getElementById('octOut').textContent='—';document.getElementById('decOut').textContent='—';document.getElementById('hexOut').textContent='—'}
+</script>
+</body>
+</html>

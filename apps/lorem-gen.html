@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>占位文本生成器</title>
+<style>
+/* ============================================================
+   白色极简主题 — 纯白底 + 黑字 + 黑边框
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --panel-bg: #fafafa;
+  --text: #111111;
+  --text-light: #555555;
+  --border: #000000;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --success: #111111;
+  --danger: #cc0000;
+  --radius: 0px;
+  --font-mono: "Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace;
+  --font-sans: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans); background: var(--bg); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; background: var(--panel-bg);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.titlebar h1 { font-size: 1rem; font-weight: 600; }
+.titlebar-controls { display: flex; gap: 8px; }
+.btn {
+  padding: 6px 16px; border: 1px solid var(--border);
+  background: #fff; color: var(--text); font-size: 0.82rem;
+  cursor: pointer; font-family: inherit; transition: all 0.1s;
+}
+.btn:hover { background: var(--accent); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+.help-panel {
+  margin: 0; border-bottom: 1px solid var(--border);
+  background: #fff; flex-shrink: 0;
+}
+.help-panel summary {
+  padding: 8px 20px; cursor: pointer; font-size: 0.78rem;
+  font-weight: 600; color: var(--text-light); user-select: none;
+}
+.help-panel summary:hover { color: var(--text); }
+.help-content {
+  padding: 0 20px 14px; font-size: 0.78rem; color: var(--text-light);
+  line-height: 1.7;
+}
+.help-content h3 { font-size: 0.85rem; color: var(--text); margin: 8px 0 4px; }
+.help-content ul { padding-left: 18px; margin: 2px 0 6px; }
+.help-content kbd {
+  padding: 1px 6px; border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 0.72rem; background: #f5f5f5;
+}
+.main {
+  flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 20px;
+  gap: 14px;
+}
+/* Tab */
+.tab-row {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.tab {
+  padding: 8px 18px; border: none; background: #fff;
+  font-size: 0.85rem; cursor: pointer; color: var(--text-light);
+  border-bottom: 2px solid transparent; transition: all 0.1s;
+  font-family: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--border); }
+/* 控制区 */
+.control-bar {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px 16px; border: 1px solid var(--border); flex-shrink: 0;
+}
+.control-group { display: flex; align-items: center; gap: 6px; }
+.control-group label { font-size: 0.82rem; font-weight: 600; white-space: nowrap; }
+.control-group input[type=number] {
+  width: 64px; padding: 4px 8px; border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 0.82rem; text-align: center;
+  background: #fff; color: var(--text);
+}
+.control-group input[type=number]:focus { outline: none; border-width: 2px; }
+.control-group select {
+  padding: 4px 8px; border: 1px solid var(--border);
+  font-size: 0.82rem; background: #fff; color: var(--text);
+}
+/* 结果区 */
+.output-area {
+  flex: 1; overflow-y: auto; border: 1px solid var(--border);
+  padding: 16px; background: #fff; font-size: 0.9rem; line-height: 1.7;
+  word-wrap: break-word;
+}
+.output-area p { margin: 4px 0; }
+.output-area span { font-family: var(--font-mono); white-space: pre-wrap; }
+.output-area div { white-space: pre-wrap; }
+/* 统计行 */
+.stat-row {
+  display: flex; gap: 16px; font-size: 0.78rem; color: var(--text-light);
+  flex-shrink: 0;
+}
+.stat-row span { font-weight: 600; color: var(--text); }
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  padding: 8px 20px; background: var(--panel-bg); border: 1px solid var(--border);
+  font-size: 0.82rem; z-index: 999; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <h1>占位文本生成器</h1>
+  <div class="titlebar-controls">
+    <button class="btn btn-sm" onclick="generate()" title="生成 Ctrl+G">生成文本</button>
+    <button class="btn btn-sm" onclick="copyOutput()" title="复制 Ctrl+C">复制全部</button>
+    <button class="btn btn-sm" onclick="exportTXT()">导出 TXT</button>
+  </div>
+</div>
+
+<details class="help-panel" open>
+  <summary>使用说明</summary>
+  <div class="help-content">
+    <h3>占位文本生成器</h3>
+    <p>快速生成中文乱数假文或英文 Lorem Ipsum 占位文本，用于页面排版和设计预览。</p>
+    <h3>主要功能</h3>
+    <ul>
+      <li><strong>中文模式</strong>：基于《千字文》+现代语义混合生成的乱数假文</li>
+      <li><strong>英文模式</strong>：标准 Lorem Ipsum 拉丁文（Cicero 公元前45年）</li>
+      <li>按段落数、句子数或总字数三种方式精确控制生成量</li>
+      <li>支持 HTML 标签包裹（p / span / div），方便直接粘贴到代码中</li>
+    </ul>
+    <h3>快捷键</h3>
+    <ul>
+      <li><kbd>Ctrl+G</kbd> 生成文本</li>
+      <li><kbd>Ctrl+C</kbd> 复制结果</li>
+    </ul>
+  </div>
+</details>
+
+<div class="main">
+  <div class="tab-row">
+    <button class="tab active" onclick="switchTab('cn',this)">中文乱数假文</button>
+    <button class="tab" onclick="switchTab('en',this)">Lorem Ipsum</button>
+  </div>
+
+  <div class="control-bar">
+    <div class="control-group">
+      <label>生成方式</label>
+      <select id="genMode" onchange="onModeChange()">
+        <option value="paragraphs">段落数</option>
+        <option value="sentences">句子数</option>
+        <option value="words">字数</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>数量</label>
+      <input type="number" id="genCount" value="3" min="1" max="200">
+    </div>
+    <div class="control-group">
+      <label>HTML标签</label>
+      <select id="htmlTag">
+        <option value="">无标签</option>
+        <option value="p">&lt;p&gt;</option>
+        <option value="span">&lt;span&gt;</option>
+        <option value="div">&lt;div&gt;</option>
+      </select>
+    </div>
+    <button class="btn btn-sm" onclick="generate()">生成</button>
+  </div>
+
+  <div class="output-area" id="output"></div>
+
+  <div class="stat-row" id="statRow" style="display:none">
+    共生成 <span id="charCount">0</span> 个字符 / <span id="paraCount">0</span> 段 / <span id="sentCount">0</span> 句
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentLang="cn";
+
+// 中文词库
+const CN_WORDS=[
+  "天地玄黄","宇宙洪荒","日月盈昃","辰宿列张","寒来暑往","秋收冬藏",
+  "金生丽水","玉出昆冈","剑号巨阙","珠称夜光","海咸河淡","鳞潜羽翔",
+  "龙师火帝","鸟官人皇","始制文字","乃服衣裳","推位让国","有虞陶唐",
+  "用户体验","界面设计","数据驱动","高效开发","响应式布局","跨平台兼容",
+  "技术架构","性能优化","持续集成","自动化测试","云端部署","微服务",
+  "前端框架","后端引擎","数据库索引","缓存策略","负载均衡","消息队列",
+  "简洁的设计带来更高效的工作体验","团队协作是项目成功的关键要素",
+  "技术方案的选择直接影响产品迭代速度","数据分析为决策提供有力支撑",
+  "随着移动互联网的普及","在当前数字化转型的浪潮中","从实际应用角度来看",
+  "通过不断的技术创新","结合多年的行业经验","根据最新的市场调研",
+  "我们致力于打造","不仅需要关注","与此同时","除此之外","另一方面",
+  "可以预见","综上所述","总而言之","由此可见","换言之",
+];
+const CN_CONJ=["的","了","在","是","与","和","或","而","但","且","因为","所以","如果","虽然","因此",
+  "于是","然后","接着","另外","同时","此外","最后","首先","其次","再次","终于",
+  "一个","这个","那个","每个","所有","一些","某种","任何"];
+
+const EN_WORDS=[
+  "lorem","ipsum","dolor","sit","amet","consectetur","adipiscing","elit",
+  "sed","do","eiusmod","tempor","incididunt","ut","labore","et","dolore","magna","aliqua",
+  "enim","ad","minim","veniam","quis","nostrud","exercitation","ullamco",
+  "laboris","nisi","ut","aliquip","ex","ea","commodo","consequat",
+  "duis","aute","irure","dolor","in","reprehenderit","in","voluptate",
+  "velit","esse","cillum","dolore","eu","fugiat","nulla","pariatur",
+  "excepteur","sint","occaecat","cupidatat","non","proident","sunt",
+  "culpa","qui","officia","deserunt","mollit","anim","id","est","laborum",
+  "facilisis","gravida","neque","convallis","cras","semper","auctor",
+  "neque","vitae","tempus","quam","pellentesque","nec","nam","aliquam",
+];
+
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function genCnWord(){
+  return pick(CN_WORDS);
+}
+
+function genCnSentence(minLen=8,maxLen=25){
+  let s="";
+  const target=randInt(minLen,maxLen);
+  while(s.length<target){
+    if(Math.random()<0.6){
+      s+=genCnWord();
+    }else{
+      s+=pick(CN_CONJ);
+    }
+  }
+  return s+"。";
+}
+
+function genEnWord(){
+  return pick(EN_WORDS);
+}
+
+function genEnSentence(minWords=5,maxWords=18){
+  const count=randInt(minWords,maxWords);
+  let s="";
+  for(let i=0;i<count;i++) s+=genEnWord()+" ";
+  return s.trim().charAt(0).toUpperCase()+s.trim().slice(1)+".";
+}
+
+function genCnParagraph(sentCount=randInt(3,7)){
+  let p="";
+  for(let i=0;i<sentCount;i++) p+=genCnSentence();
+  return p;
+}
+
+function genEnParagraph(sentCount=randInt(4,8)){
+  let p="";
+  for(let i=0;i<sentCount;i++) p+=genEnSentence()+" ";
+  return p.trim();
+}
+
+function generate(){
+  const mode=document.getElementById("genMode").value;
+  const count=parseInt(document.getElementById("genCount").value)||3;
+  const tag=document.getElementById("htmlTag").value;
+  let result="";
+  let totalChars=0, totalParas=0, totalSents=0;
+
+  if(currentLang==="cn"){
+    if(mode==="paragraphs"){
+      for(let i=0;i<count;i++){
+        const sc=randInt(3,7);
+        const p=genCnParagraph(sc);
+        result+=wrapTag(p,tag,i<count-1)+"\n";
+        totalParas++; totalSents+=sc; totalChars+=p.length;
+      }
+    }else if(mode==="sentences"){
+      for(let i=0;i<count;i++){
+        const s=genCnSentence();
+        result+=wrapInline(s,tag)+" ";
+        totalSents++; totalChars+=s.length;
+      }
+      totalParas=1;
+    }else{
+      let cur=0;
+      while(cur<count){
+        const s=genCnSentence();
+        result+=wrapInline(s,tag)+" ";
+        cur+=s.length; totalSents++;
+      }
+      totalCharEstimate(); totalParas=1;
+    }
+  }else{
+    if(mode==="paragraphs"){
+      for(let i=0;i<count;i++){
+        const sc=randInt(4,8);
+        const p=genEnParagraph(sc);
+        result+=wrapTag(p,tag,i<count-1)+"\n";
+        totalParas++; totalSents+=sc; totalChars+=p.length;
+      }
+    }else if(mode==="sentences"){
+      for(let i=0;i<count;i++){
+        const s=genEnSentence();
+        result+=wrapInline(s,tag)+" ";
+        totalSents++; totalChars+=s.length;
+      }
+      totalParas=1;
+    }else{
+      let cur=0;
+      while(cur<count){
+        const s=genEnSentence();
+        result+=wrapInline(s,tag)+" ";
+        cur+=s.split(" ").length; totalSents++;
+      }
+      totalChars=result.length; totalParas=1;
+    }
+  }
+
+  totalChars=result.length;
+  document.getElementById("output").textContent=result.trim();
+  document.getElementById("statRow").style.display="flex";
+  document.getElementById("charCount").textContent=totalChars;
+  document.getElementById("paraCount").textContent=totalParas;
+  document.getElementById("sentCount").textContent=totalSents;
+}
+
+function totalCharEstimate(){
+  // 已在上面处理
+}
+
+function wrapTag(text,tag,addNewline){
+  if(!tag) return text;
+  if(tag==="p") return `<${tag}>${text}</${tag}>`;
+  return `<${tag}>${text}</${tag}>`+(addNewline?"\n":"");
+}
+
+function wrapInline(text,tag){
+  if(!tag) return text;
+  return `<${tag}>${text}</${tag}>`;
+}
+
+function switchTab(lang,btn){
+  currentLang=lang;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  btn.classList.add("active");
+  generate();
+}
+
+function onModeChange(){
+  const mode=document.getElementById("genMode").value;
+  document.getElementById("genCount").value=mode==="words"?"100":"3";
+  generate();
+}
+
+function copyOutput(){
+  const text=document.getElementById("output").textContent;
+  if(!text) return;
+  navigator.clipboard.writeText(text).then(()=>toastMsg("已复制到剪贴板"));
+}
+
+function exportTXT(){
+  const text=document.getElementById("output").textContent;
+  if(!text) return;
+  const blob=new Blob([text],{type:"text/plain;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="placeholder.txt"; a.click();
+  URL.revokeObjectURL(url);
+  toastMsg("已导出 TXT");
+}
+
+function toastMsg(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._tid);
+  t._tid=setTimeout(()=>t.classList.remove("show"),1800);
+}
+
+document.addEventListener("keydown",e=>{
+  if(e.ctrlKey&&e.key==="g"){ e.preventDefault(); generate(); }
+  if(e.ctrlKey&&e.key==="c"&&!e.target.closest("input,textarea,select")){ e.preventDefault(); copyOutput(); }
+});
+
+generate();
+</script>
+</body>
+</html>

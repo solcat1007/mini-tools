@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>罗马数字转换器</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px;align-items:center}
+.convert-card{border:1px solid var(--border);padding:20px 24px;max-width:520px;width:100%;display:flex;flex-direction:column;gap:12px}
+.input-row{display:flex;gap:8px;align-items:center}
+.input-row input{flex:1;padding:10px 14px;border:1px solid var(--border);font-family:var(--font-mono);font-size:1.1rem;background:#fff;color:var(--text);outline:none;text-align:center}
+.input-row input:focus{border-width:2px}
+.input-row input::placeholder{color:#bbb;font-size:.85rem}
+.result-display{text-align:center;font-family:var(--font-mono);font-size:2rem;padding:16px;border:1px solid var(--border);background:var(--panel-bg);min-height:64px;display:flex;align-items:center;justify-content:center;word-break:break-all}
+.result-display.roman{font-size:1.6rem;letter-spacing:2px}
+.error-msg{color:var(--danger,#c00);font-size:.82rem;text-align:center;min-height:20px}
+.rule-section{border:1px solid var(--border);padding:16px;max-width:520px;width:100%;font-size:.82rem}
+.rule-section h3{font-size:.85rem;margin-bottom:8px}
+.rule-section table{border-collapse:collapse;width:100%}
+.rule-section td{border:1px solid #eee;padding:4px 10px;font-family:var(--font-mono)}
+.rule-section td:first-child{font-weight:600}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>罗马数字转换器</h1></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>罗马数字转换器</h3>
+<p>阿拉伯数字与罗马数字双向实时转换。范围：1 ~ 3999。</p>
+<ul><li><strong>阿拉伯 → 罗马</strong>：输入数字（如 2024），自动转为 MMXXIV</li><li><strong>罗马 → 阿拉伯</strong>：输入罗马数字（如 MMXXIV），自动转为 2024</li><li>无效输入会显示错误提示</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="convert-card">
+<div class="input-row">
+<input id="arabicInput" placeholder="阿拉伯数字 (1-3999)..." oninput="arabicToRoman()">
+<span style="font-size:1.2rem;color:var(--text-light)">⇄</span>
+<input id="romanInput" placeholder="罗马数字 (I, V, X, L, C, D, M)..." oninput="romanToArabic()" style="text-transform:uppercase">
+</div>
+<div class="result-display roman" id="romanResult"></div>
+<div class="result-display" id="arabicResult"></div>
+<div class="error-msg" id="errorMsg"></div>
+</div>
+<div class="rule-section">
+<h3>罗马数字规则</h3>
+<table>
+<tr><td>I</td><td>1</td><td>V</td><td>5</td><td>X</td><td>10</td><td>L</td><td>50</td></tr>
+<tr><td>C</td><td>100</td><td>D</td><td>500</td><td>M</td><td>1000</td></tr>
+<tr><td>IV</td><td>4</td><td>IX</td><td>9</td><td>XL</td><td>40</td><td>XC</td><td>90</td></tr>
+<tr><td>CD</td><td>400</td><td>CM</td><td>900</td><td></td><td></td></tr>
+</table>
+<p style="margin-top:8px;color:var(--text-light)">左减右加原则：小数在大数左边为减，右边为加。同一符号最多连续出现三次。</p>
+</div>
+</div>
+<script>
+const valMap=[{v:1000,s:'M'},{v:900,s:'CM'},{v:500,s:'D'},{v:400,s:'CD'},{v:100,s:'C'},{v:90,s:'XC'},{v:50,s:'L'},{v:40,s:'XL'},{v:10,s:'X'},{v:9,s:'IX'},{v:5,s:'V'},{v:4,s:'IV'},{v:1,s:'I'}];
+const romMap={I:1,V:5,X:10,L:50,C:100,D:500,M:1000};
+
+function arabicToRoman(){
+  let inp=document.getElementById('arabicInput').value.trim();
+  document.getElementById('errorMsg').textContent='';
+  if(!inp){document.getElementById('romanResult').textContent='';return}
+  let n=parseInt(inp,10);
+  if(isNaN(n)||n<1||n>3999||n!==parseFloat(inp)){document.getElementById('romanResult').textContent='';document.getElementById('errorMsg').textContent='请输入 1~3999 的整数';return}
+  let result='',num=n;
+  for(let{ v,s }of valMap){while(num>=v){result+=s;num-=v}}
+  document.getElementById('romanResult').textContent=result;
+}
+
+function romanToArabic(){
+  let inp=document.getElementById('romanInput').value.toUpperCase().trim();
+  document.getElementById('errorMsg').textContent='';
+  if(!inp){document.getElementById('arabicResult').textContent='';return}
+  if(!/^[IVXLCDM]+$/.test(inp)){document.getElementById('arabicResult').textContent='';document.getElementById('errorMsg').textContent='无效罗马数字字符';return}
+  let total=0,prev=0;
+  for(let i=inp.length-1;i>=0;i--){
+    let cur=romMap[inp[i]];
+    if(!cur){document.getElementById('arabicResult').textContent='';document.getElementById('errorMsg').textContent='无效字符: '+inp[i];return}
+    if(cur<prev)total-=cur;else total+=cur;
+    prev=cur;
+  }
+  if(total<1||total>3999){document.getElementById('arabicResult').textContent='';document.getElementById('errorMsg').textContent='结果超出范围 (1-3999)';return}
+  // Verify: convert back to roman and check
+  let verify='',num=total;
+  for(let{v,s}of valMap){while(num>=v){verify+=s;num-=v}}
+  if(verify!==inp){document.getElementById('arabicResult').textContent='';document.getElementById('errorMsg').textContent='不是有效的罗马数字格式';return}
+  document.getElementById('arabicResult').textContent=total;
+}
+</script>
+</body>
+</html>

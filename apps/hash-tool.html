@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>哈希计算工具</title>
+<style>
+/* ============================================================
+   白色极简主题 — 纯白底 + 黑字 + 黑边框
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --panel-bg: #fafafa;
+  --text: #111111;
+  --text-light: #555555;
+  --border: #000000;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --success: #111111;
+  --danger: #cc0000;
+  --radius: 0px;
+  --font-mono: "Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace;
+  --font-sans: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans); background: var(--bg); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* 使用说明面板 */
+.help-panel {
+  border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-shrink: 0;
+}
+.help-toggle {
+  padding: 10px 16px; font-size:0.82rem; font-weight:600; cursor:pointer;
+  user-select:none; list-style:none; color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.help-toggle::-webkit-details-marker { display:none; }
+.help-toggle::before { content: '▶ '; font-size:0.7rem; display:inline-block; transition:transform 0.15s; }
+details[open] .help-toggle::before { transform: rotate(90deg); }
+.help-content {
+  padding: 12px 16px; font-size:0.78rem; line-height:1.7; color: var(--text);
+  background: #fff; border-bottom: 1px solid var(--border);
+}
+.help-content h3 { font-size:0.9rem; margin-bottom:6px; font-weight:700; }
+.help-content h4 { font-size:0.8rem; margin:8px 0 4px; font-weight:600; }
+.help-content ul { padding-left:18px; margin:4px 0; }
+.help-content li { margin:2px 0; }
+.help-content table { border-collapse:collapse; width:100%; margin:6px 0; font-size:0.75rem; }
+.help-content th, .help-content td { border:1px solid var(--border); padding:4px 8px; text-align:left; }
+.help-content th { background: #f5f5f5; font-weight:600; }
+.help-content code { background:#f0f0f0; padding:1px 4px; font-family:var(--font-mono); font-size:0.72rem; }
+
+/* 标题栏 */
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; height: 44px; background: #fafafa;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  user-select: none;
+}
+.titlebar-title { font-size:0.9rem; font-weight:600; }
+.titlebar-actions { display:flex; gap:6px; }
+
+/* 按钮 */
+.btn {
+  padding: 5px 12px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.82rem; cursor: pointer;
+  font-family: inherit; white-space: nowrap; transition: all 0.1s;
+}
+.btn:hover { background: var(--accent); color:#fff; }
+.btn.primary { background:var(--accent); color:#fff; }
+.btn.primary:hover { background:var(--accent-hover); }
+
+/* 标签页 */
+.tab-row {
+  display: flex; gap: 0; padding: 8px 16px 0; flex-shrink: 0;
+}
+.tab-btn {
+  padding: 8px 18px; border: 1px solid var(--border); border-bottom: none;
+  background: #fafafa; color: var(--text-light);
+  font-size: 0.85rem; cursor: pointer; font-family: inherit;
+  margin-right: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: #fff; color: var(--text); font-weight:600; border-bottom: 2px solid var(--border); }
+
+.main {
+  flex:1; display:flex; overflow:hidden; min-height:0;
+}
+.tab-content { display:none; flex:1; flex-direction:column; overflow:hidden; gap:14px; }
+.tab-content.active { display:flex; }
+
+/* 文本输入框 */
+textarea, input[type="text"], input[type="number"], select {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  font-family: inherit; outline: none;
+}
+textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(original - 1px); }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:50px; left:50%; transform:translateX(-50%);
+  background:var(--accent); color:#fff; padding:10px 24px;
+  font-size:0.85rem; z-index:999;
+  opacity:0; transition:opacity 0.2s; pointer-events:none;
+  border: 1px solid var(--border);
+}
+.toast.show { opacity:1; }
+.toast.success { background:var(--success); }
+.toast.error { background:var(--danger); }
+
+/* 哈希工具专用样式 */
+.tab-content { display:none; flex:1; flex-direction:column; overflow:hidden; }
+.tab-content.active { display:flex; }
+.text-area { flex:1; display:flex; flex-direction:column; gap:10px; padding:16px; }
+#textHashInput { flex:1; padding:12px; border:1px solid var(--border); background: #fff; color: var(--text); font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.6; resize: none; outline: none; }
+#textHashInput:focus { border-width:2px; }
+#textHashInput::placeholder { color: #999; }
+.algo-select-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.algo-btn { padding: 6px 14px; border: 1px solid var(--border); background: #fff; color: var(--text-light); font-size: 0.8rem; cursor: pointer; font-family: var(--font-mono); transition: all 0.15s; }
+.algo-btn:hover { background:var(--accent); color:#fff; }
+.algo-btn.active { background: var(--accent); color: #fff; }
+.result-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex-shrink: 0; padding: 0 16px 16px; }
+.result-card { background: #fafafa; border: 1px solid var(--border); padding: 10px 12px; cursor:pointer; }
+.result-card .algo-name { font-size:0.7rem; color:var(--text); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; font-weight:600; }
+.result-card .hash-value { font-family: var(--font-mono); font-size:0.75rem; color: var(--text); word-break: break-all; }
+.file-area { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:16px; }
+.dropzone { width: 100%; max-width: 500px; min-height: 180px; border: 2px dashed var(--border); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition: all 0.2s; background: #fafafa; }
+.dropzone:hover { border-color: var(--accent); background: #f5f5f5; }
+.dropzone .dz-icon { font-size:2.5rem; margin-bottom:8px; }
+.dropzone .dz-text { color:var(--text-light); font-size:0.85rem; }
+.file-name { font-family:var(--font-mono); color:var(--text); font-size:0.85rem; margin-top:4px; }
+.file-size { color:var(--text-light); font-size:0.7rem; }
+
+/* === Auto-fix: shared utility styles === */
+.toolbar {
+  display: flex; align-items: center; gap: 6px; padding: 6px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.toolbar-btn:hover { background: var(--accent); color: #fff; }
+.toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+.toolbar-hint { font-size: 0.7rem; color: var(--text-light); margin-left: auto; }
+.titlebar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.titlebar-btn:hover { background: var(--accent); color: #fff; }
+.accent { background: var(--accent); color: #fff; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+.stats {
+  display: flex; gap: 16px; padding: 6px 16px; font-size: 0.72rem;
+  color: var(--text-light); flex-shrink: 0; border-top: 1px solid var(--border);
+  background: #fafafa;
+}
+.stat-item { display: flex; align-items: center; gap: 4px; }
+.stat-val { color: var(--text); font-weight: 600; font-family: var(--font-mono); }
+.statusbar {
+  display: flex; align-items: center; gap: 12px; padding: 6px 16px;
+  font-size: 0.72rem; color: var(--text-light);
+  border-top: 1px solid var(--border); background: #fafafa; flex-shrink: 0;
+}
+.status-item { display: flex; align-items: center; gap: 4px; }
+.status-count { color: var(--text); font-weight: 600; }
+.context-menu {
+  position: fixed; background: #fff; border: 1px solid var(--border);
+  padding: 6px 0; z-index: 1000; display: none; min-width: 160px;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+}
+.context-menu.show { display: block; }
+.context-item {
+  padding: 8px 16px; font-size: 0.82rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background 0.1s;
+}
+.context-item:hover { background: #f0f0f0; }
+.context-shortcut { font-size: 0.7rem; color: var(--text-light); }
+.editor-area { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+.result-area { display: flex; flex-direction: column; overflow: hidden; }
+.panel-body { flex: 1; display: flex; overflow: hidden; }
+.divider {
+  width: 4px; cursor: col-resize; background: #f0f0f0;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.divider:hover, .divider.active { background: var(--border); }
+.drop-highlight { border: 2px dashed var(--accent) !important; background: #fafafa !important; }
+.info { padding: 14px; color: var(--text-light); font-size: 0.82rem; }
+.indent-select {
+  padding: 2px 6px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.75rem; font-family: inherit;
+}
+.valid { border-color: #000 !important; }
+.invalid { border-color: var(--danger) !important; }
+.error-msg { color: var(--danger); font-size: var(--font-mono); padding: 4px 0; }
+.no-match { color: var(--text-light); font-size: 0.85rem; }
+/* regex-tester */
+.regex-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+}
+.regex-row input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; }
+.flag-options { display: flex; gap: 4px; }
+.flag-options .btn { padding: 3px 10px; font-size: 0.75rem; }
+.flag-options .btn.active { background: var(--accent); color: #fff; }
+.editor-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.editor-wrap textarea { flex: 1; padding: 12px; border: none; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; outline: none; }
+.presets { display: flex; gap: 4px; padding: 6px 16px; flex-shrink: 0; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.preset-btn { padding: 3px 10px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+.preset-btn:hover { background: var(--accent); color: #fff; }
+.match-text { color: var(--text); font-weight: 600; }
+.match-groups { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-light); }
+/* screenshot-tool */
+.tool-group { display: flex; gap: 2px; }
+.tool-label { font-size: 0.7rem; color: var(--text-light); margin-bottom: 2px; }
+.stroke-select { padding: 2px 4px; border: 1px solid var(--border); font-size: 0.72rem; }
+.selected { background: var(--accent) !important; color: #fff !important; }
+.canvas-container {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #f0f0f0; overflow: hidden; position: relative;
+}
+.canvas-placeholder { color: var(--text-light); font-size: 1.2rem; }
+/* color-picker */
+.color-preview {
+  width: 100%; height: 120px; border: 1px solid var(--border);
+  cursor: pointer; transition: background 0.2s;
+}
+.picker-section { display: flex; flex-direction: column; gap: 10px; }
+.mid-section { display: flex; gap: 10px; }
+.right-section { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.color-row { display: flex; align-items: center; gap: 8px; }
+.color-values { display: flex; flex-direction: column; gap: 4px; }
+.section-title { font-size: 0.72rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; }
+.info-block { font-size: 0.78rem; line-height: 1.6; color: var(--text); }
+.info-block .key { font-weight: 600; }
+.favorites-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.card { background: #fff; border: 1px solid var(--border); padding: 8px; font-size: 0.75rem; }
+.export-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; background: #fafafa; border: 1px solid var(--border); }
+.eyedropper-overlay { position: fixed; inset: 0; z-index: 999; cursor: crosshair; }
+.eyedropper-magnifier { width: 30px; height: 30px; border: 2px solid var(--border); border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+.eyedropper-label { font-size: 0.75rem; color: var(--text-light); }
+/* base64-tool */
+.text-panel { display: flex; flex-direction: column; overflow: hidden; }
+.text-row { display: flex; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+.text-actions { display: flex; gap: 4px; }
+.img-panel { display: flex; flex-direction: column; overflow: hidden; }
+.img-actions { display: flex; gap: 4px; padding: 8px 16px; flex-shrink: 0; }
+.col-header { font-size: 0.78rem; font-weight: 600; padding: 8px 16px; background: #fafafa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.col-body { flex: 1; overflow: hidden; display: flex; }
+.text-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.img-result { max-width: 100%; max-height: 300px; object-fit: contain; }
+.img-dropzone {
+  flex: 1; min-height: 160px; border: 2px dashed var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s; background: #fafafa; margin: 8px;
+}
+.img-dropzone:hover { border-color: var(--accent); background: #f5f5f5; }
+.placeholder { color: var(--text-light); font-size: 0.85rem; }
+/* qrcode-tool */
+.input-section { display: flex; gap: 8px; padding: 12px 16px; flex-shrink: 0; }
+.input-section textarea { flex: 1; padding: 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; min-height: 60px; }
+.qr-section {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #fafafa; overflow: hidden;
+}
+.qr-placeholder { color: var(--text-light); font-size: 1.1rem; }
+.size-row { display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+/* timer */
+.mode-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.mode-tab {
+  padding: 8px 18px; border: none; border-right: 1px solid var(--border);
+  background: #fafafa; color: var(--text-light); font-size: 0.85rem;
+  cursor: pointer; font-family: inherit;
+}
+.mode-tab:hover { color: var(--text); }
+.mode-tab.active { background: #fff; color: var(--text); font-weight: 600; }
+.controls { display: flex; justify-content: center; gap: 8px; padding: 12px; flex-shrink: 0; }
+.control-btn {
+  padding: 8px 18px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.85rem; cursor: pointer; font-family: inherit;
+}
+.control-btn:hover { background: var(--accent); color: #fff; }
+.control-btn.start { background: var(--accent); color: #fff; }
+.control-btn.pause { background: #f5f5f5; }
+.control-btn.reset { color: var(--danger); }
+.settings-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; flex-shrink: 0; }
+.time-input-row { display: flex; align-items: center; gap: 8px; }
+.time-input-row input { width: 60px; padding: 4px 8px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; text-align: center; }
+.progress-bar { height: 4px; background: #f0f0f0; flex-shrink: 0; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.pomodoro-section { display: flex; flex-direction: column; gap: 8px; padding: 8px 16px; }
+.phase-list { display: flex; flex-direction: column; gap: 4px; }
+.phase-name { font-size: 0.8rem; color: var(--text); font-weight: 500; }
+.phase-time { font-size: 0.72rem; color: var(--text-light); font-family: var(--font-mono); }
+.phase-status { font-size: 0.7rem; }
+.phase-icon { margin-right: 4px; }
+.add-phase-form { display: flex; gap: 6px; align-items: center; padding: 8px 0; }
+.add-phase-form input { padding: 4px 8px; border: 1px solid var(--border); font-size: 0.78rem; width: 100px; }
+.shortcut-hint { font-size: 0.65rem; color: var(--text-light); text-align: center; padding: 4px; }
+/* json formatter result types */
+.success { color: var(--text); }
+.error { color: var(--danger); }
+/* base64 image dropzone text cols */
+.img-dropzone .dz-icon { font-size: 2.5rem; }
+.img-dropzone .dz-text { color: var(--text-light); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<details class="help-panel" open>
+  <summary class="help-toggle">使用说明</summary>
+  <div class="help-content">
+### 哈希计算工具
+文本与文件哈希计算工具，支持五种主流算法。
+
+**主要功能**
+- 文本哈希：输入文本即时计算，支持单选或全部五种算法
+- 文件哈希：拖拽或上传任意文件，计算文件哈希值
+- 算法支持：MD5 / SHA-1 / SHA-256 / SHA-384 / SHA-512
+- 大小写切换、一键复制结果
+- MD5 纯 JS 实现，SHA 系列基于 Web Crypto API
+
+**注意事项**
+- 文件哈希计算大文件时可能耗时
+- SHA-512 安全性最高但哈希值最长
+  </div>
+</details>
+
+<div class="titlebar">
+  <span class="titlebar-title">🔐 哈希计算工具</span>
+  <div class="titlebar-actions">
+    <label style="display:flex;align-items:center;gap:4px;font-size:0.78rem;cursor:pointer;margin-right:8px;">
+      <input type="checkbox" id="uppercaseChk" onchange="toggleCase()"> 大写
+    </label>
+  </div>
+</div>
+
+<div class="tab-row">
+  <button class="tab-btn active" onclick="switchTab('text')">📝 文本哈希</button>
+  <button class="tab-btn" onclick="switchTab('file')">📁 文件哈希</button>
+</div>
+
+<div class="main">
+  <!-- 文本哈希 Tab -->
+  <div class="tab-content active" id="tabText">
+    <div class="text-area">
+      <div class="algo-select-row" id="algoSelectRow">
+        <button class="algo-btn active" data-algo="MD5" onclick="selectAlgo(this)">MD5</button>
+        <button class="algo-btn" data-algo="SHA-1" onclick="selectAlgo(this)">SHA-1</button>
+        <button class="algo-btn" data-algo="SHA-256" onclick="selectAlgo(this)">SHA-256</button>
+        <button class="algo-btn" data-algo="SHA-384" onclick="selectAlgo(this)">SHA-384</button>
+        <button class="algo-btn" data-algo="SHA-512" onclick="selectAlgo(this)">SHA-512</button>
+        <button class="algo-btn" onclick="computeAllText()" style="border-color:var(--accent);">全部计算</button>
+      </div>
+      <textarea id="textHashInput" placeholder="在此输入文本，结果将实时显示在下方..."></textarea>
+      <div class="result-cards" id="textResultCards">
+        <div class="result-card"><div class="algo-name">MD5</div><div class="hash-value">—</div></div>
+        <div class="result-card"><div class="algo-name">SHA-1</div><div class="hash-value">—</div></div>
+        <div class="result-card"><div class="algo-name">SHA-256</div><div class="hash-value">—</div></div>
+        <div class="result-card"><div class="algo-name">SHA-512</div><div class="hash-value">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 文件哈希 Tab -->
+  <div class="tab-content" id="tabFile">
+    <div class="file-area">
+      <div class="dropzone" id="fileDropzone" onclick="document.getElementById('fileInput2').click()"
+           ondragover="e=>{e.preventDefault();this.style.borderColor='var(--accent)';}"
+           ondragleave="e=>{e.preventDefault();this.style.borderColor='';}"
+           ondrop="handleFileDrop(event)">
+        <div class="dz-icon">📁</div>
+        <div class="dz-text">点击或拖拽文件到此处</div>
+        <div class="file-name" id="fileNameDisplay"></div>
+        <div class="file-size" id="fileSizeDisplay"></div>
+      </div>
+      <div class="result-cards" id="fileResultCards" style="width:100%;max-width:600px;">
+        <div class="result-card"><div class="algo-name">MD5</div><div class="hash-value">—</div></div>
+        <div class="result-card"><div class="algo-name">SHA-1</div><div class="hash-value">—</div></div>
+        <div class="result-card"><div class="algo-name">SHA-256</div><div class="hash-value">—</div></div>
+        <div class="result-card"><div class="algo-name">SHA-512</div><div class="hash-value">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput2" style="display:none">
+
+<script>
+(function() {
+  'use strict';
+
+  var textInput     = document.getElementById('textHashInput');
+  var textCards     = document.getElementById('textResultCards');
+  var fileCards     = document.getElementById('fileResultCards');
+  var fileDropzone  = document.getElementById('fileDropzone');
+  var fileInput2    = document.getElementById('fileInput2');
+  var fileNameDisp  = document.getElementById('fileNameDisplay');
+  var fileSizeDisp  = document.getElementById('fileSizeDisplay');
+  var uppercaseChk  = document.getElementById('uppercaseChk');
+  var toastEl       = document.getElementById('toast');
+
+  var currentAlgo = 'MD5';
+  var isUppercase = false;
+  var toastTimer = null;
+
+  function showToast(msg, type) {
+    if (toastTimer) clearTimeout(toastTimer);
+    toastEl.textContent = msg; toastEl.className = 'toast ' + (type||'') + ' show';
+    toastTimer = setTimeout(function(){toastEl.classList.remove('show');}, 2000);
+  }
+
+  /* ---- MD5 纯 JS 实现 ---- */
+  /* MD5 核心函数（RFC 1321） */
+  function md5(string) {
+    function rotateLeft(lValue, iShiftBits) {
+      return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
+    }
+    function addUnsigned(lX, lY) {
+      var lX8 = lX & 0x80000000, lY8 = lY & 0x80000000;
+      var lX4 = lX & 0x40000000, lY4 = lY & 0x40000000;
+      var lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
+      if (lX4 & lY4) return lResult ^ 0x80000000 ^ lX8 ^ lY8;
+      if (lX4 | lY4) {
+        if (lResult & 0x40000000) return lResult ^ 0xC0000000 ^ lX8 ^ lY8;
+        return lResult ^ 0x40000000 ^ lX8 ^ lY8;
+      }
+      return lResult ^ lX8 ^ lY8;
+    }
+    function f(x,y,z) { return (x & y) | ((~x) & z); }
+    function g(x,y,z) { return (x & z) | (y & (~z)); }
+    function h(x,y,z) { return x ^ y ^ z; }
+    function i(x,y,z) { return y ^ (x | (~z)); }
+    function fnF(a,b,c,d,x,s,ac) {
+      a = addUnsigned(a, addUnsigned(addUnsigned(f(b,c,d), x), ac));
+      return addUnsigned(rotateLeft(a, s), b);
+    }
+    function fnG(a,b,c,d,x,s,ac) {
+      a = addUnsigned(a, addUnsigned(addUnsigned(g(b,c,d), x), ac));
+      return addUnsigned(rotateLeft(a, s), b);
+    }
+    function fnH(a,b,c,d,x,s,ac) {
+      a = addUnsigned(a, addUnsigned(addUnsigned(h(b,c,d), x), ac));
+      return addUnsigned(rotateLeft(a, s), b);
+    }
+    function fnI(a,b,c,d,x,s,ac) {
+      a = addUnsigned(a, addUnsigned(addUnsigned(i(b,c,d), x), ac));
+      return addUnsigned(rotateLeft(a, s), b);
+    }
+
+    function stringToUtf8(str) {
+      var out = [], p = 0;
+      for (var n = 0; n < str.length; n++) {
+        var c = str.charCodeAt(n);
+        if (c < 128) { out[p++] = c; }
+        else if (c < 2048) { out[p++] = (c >> 6) | 192; out[p++] = (c & 63) | 128; }
+        else { out[p++] = (c >> 12) | 224; out[p++] = ((c >> 6) & 63) | 128; out[p++] = (c & 63) | 128; }
+      }
+      return out;
+    }
+
+    var x = stringToUtf8(string);
+    var origLen = x.length;
+    x.push(128);
+    while ((x.length % 64) !== 56) x.push(0);
+    var bitLen = origLen * 8;
+    for (var bi = 0; bi < 4; bi++) { x.push((bitLen >>> (bi * 8)) & 255); }
+    // 补齐到64字节倍数（小端序）（低32位先）
+    var low32 = bitLen & 0xffffffff;
+    var high32 = Math.floor(bitLen / 0x100000000);
+    x.splice(x.length - 8, 4, low32 & 0xff, (low32 >>> 8) & 0xff, (low32 >>> 16) & 0xff, (low32 >>> 24) & 0xff);
+    var highBytes = [high32 & 0xff, (high32 >>> 8) & 0xff, (high32 >>> 16) & 0xff, (high32 >>> 24) & 0xff];
+    x.push.apply(x, highBytes);
+
+    var a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
+    var S11=7,S12=12,S13=17,S14=22,S21=5,S22=9,S23=14,S24=20,S31=4,S32=11,S33=16,S34=23,S41=6,S42=10,S43=15,S44=21;
+
+    for (var k = 0; k < x.length; k += 64) {
+      var M = [];
+      for (var j = 0; j < 16; j++) {
+        M[j] = x[k+j*4] | (x[k+j*4+1]<<8) | (x[k+j*4+2]<<16) | (x[k+j*4+3]<<24);
+      }
+      var AA=a, BB=b, CC=c, DD=d;
+      a=fnF(a,b,c,d,M[0],S11,0xd76aa478);d=fnF(d,a,b,c,M[1],S12,0xe8c7b756);c=fnF(c,d,a,b,M[2],S13,0x242070db);b=fnF(b,c,d,a,M[3],S14,0xc1bdceee);
+      a=fnF(a,b,c,d,M[4],S11,0xf57c0faf);d=fnF(d,a,b,c,M[5],S12,0x4787c62a);c=fnF(c,d,a,b,M[6],S13,0xa8304613);b=fnF(b,c,d,a,M[7],S14,0xfd469501);
+      a=fnF(a,b,c,d,M[8],S11,0x698098d8);d=fnF(d,a,b,c,M[9],S12,0x8b44f7af);c=fnF(c,d,a,b,M[10],S13,0xffff5bb1);b=fnF(b,c,d,a,M[11],S14,0x895cd7be);
+      a=fnF(a,b,c,d,M[12],S11,0x6b901122);d=fnF(d,a,b,c,M[13],S12,0xfd987193);c=fnF(c,d,a,b,M[14],S13,0xa679438e);b=fnF(b,c,d,a,M[15],S14,0x49b40821);
+      a=fnG(a,b,c,d,M[1],S21,0xf61e2562);d=fnG(d,a,b,c,M[6],S22,0xc040b340);c=fnG(c,d,a,b,M[11],S23,0x265e5a51);b=fnG(b,c,d,a,M[0],S24,0xe9b6c7aa);
+      a=fnG(a,b,c,d,M[5],S21,0xd62f105d);d=fnG(d,a,b,c,M[10],S22,0x2441453);c=fnG(c,d,a,b,M[15],S23,0xd8a1e681);b=fnG(b,c,d,a,M[4],S24,0xe7d3fbc8);
+      a=fnG(a,b,c,d,M[9],S21,0x21e1cde6);d=fnG(d,a,b,c,M[14],S22,0xc33707d6);c=fnG(c,d,a,b,M[3],S23,0xf4d50d87);b=fnG(b,c,d,a,M[8],S24,0x455a14ed);
+      a=fnG(a,b,c,d,M[13],S21,0xa9e3e905);d=fnG(d,a,b,c,M[2],S22,0xfcefa3f8);c=fnG(c,d,a,b,M[7],S23,0x676f02d9);b=fnG(b,c,d,a,M[12],S24,0x8d2a4c8a);
+      a=fnH(a,b,c,d,M[5],S31,0xfffa3942);d=fnH(d,a,b,c,M[8],S32,0x8771f681);c=fnH(c,d,a,b,M[11],S33,0x6d9d6122);b=fnH(b,c,d,a,M[14],S34,0xfde5380c);
+      a=fnH(a,b,c,d,M[1],S31,0xa4beea44);d=fnH(d,a,b,c,M[4],S32,0x4bdecfa9);c=fnH(c,d,a,b,M[7],S33,0xf6bb4b60);b=fnH(b,c,d,a,M[10],S34,0xbebfbc70);
+      a=fnH(a,b,c,d,M[13],S31,0x289b7ec6);d=fnH(d,a,b,c,M[0],S32,0xeaa127fa);c=fnH(c,d,a,b,M[3],S33,0xd4ef3085);b=fnH(b,c,d,a,M[6],S34,0x4881d05);
+      a=fnH(a,b,c,d,M[9],S31,0xd9d4d039);d=fnH(d,a,b,c,M[12],S32,0xe6db99e5);c=fnH(c,d,a,b,M[15],S33,0x1fa27cf8);b=fnH(b,c,d,a,M[2],S34,0xc4ac5665);
+      a=fnI(a,b,c,d,M[0],S41,0xf4292244);d=fnI(d,a,b,c,M[7],S42,0x432aff97);c=fnI(c,d,a,b,M[14],S43,0xab9423a7);b=fnI(b,c,d,a,M[5],S44,0xfc93a039);
+      a=fnI(a,b,c,d,M[12],S41,0x655b59c3);d=fnI(d,a,b,c,M[3],S42,0x8f0ccc92);c=fnI(c,d,a,b,M[10],S43,0xffeff47d);b=fnI(b,c,d,a,M[1],S44,0x85845dd1);
+      a=fnI(a,b,c,d,M[8],S41,0x6fa87e4f);d=fnI(d,a,b,c,M[15],S42,0xfe2ce6e0);c=fnI(c,d,a,b,M[6],S43,0xa3014314);b=fnI(b,c,d,a,M[13],S44,0x4e0811a1);
+      a=fnI(a,b,c,d,M[4],S41,0xf7537e82);d=fnI(d,a,b,c,M[11],S42,0xbd3af235);c=fnI(c,d,a,b,M[2],S43,0x2ad7d2bb);b=fnI(b,c,d,a,M[9],S44,0xeb86d391);
+      a=addUnsigned(a,AA);b=addUnsigned(b,BB);c=addUnsigned(c,CC);d=addUnsigned(d,DD);
+    }
+    function toHex(val) {
+      var h = '0123456789abcdef';
+      var s = '';
+      for (var i=0; i<4; i++) s += h.charAt((val>>(i*8+4))&0x0F) + h.charAt((val>>(i*8))&0x0F);
+      return s;
+    }
+    return toHex(a) + toHex(b) + toHex(c) + toHex(d);
+  }
+
+  /* ---- SHA 系列（Web Crypto API） ---- */
+  function shaHash(algo, text) {
+    return crypto.subtle.digest(algo, new TextEncoder().encode(text)).then(function(buf) {
+      return Array.from(new Uint8Array(buf)).map(function(b) {
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  }
+
+  /* ---- 格式化输出 ---- */
+  function formatHash(hash) {
+    return isUppercase ? hash.toUpperCase() : hash.toLowerCase();
+  }
+
+  /* ---- 文本哈希更新 ---- */
+  function updateTextHash(algo) {
+    var text = textInput.value;
+    var cardMap = { 'MD5':0, 'SHA-1':1, 'SHA-256':2, 'SHA-512':3 };
+    var cards = textCards.querySelectorAll('.result-card');
+
+    if (!text) {
+      for (var k in cardMap) {
+        var c = cards[cardMap[k]].querySelector('.hash-value');
+        c.textContent = '—';
+      }
+      return;
+    }
+
+    if (algo === 'MD5' || algo === 'all') {
+      cards[0].querySelector('.hash-value').textContent = formatHash(md5(text));
+    }
+    if (algo === 'SHA-1' || algo === 'all') {
+      shaHash('SHA-1', text).then(function(h) {
+        cards[1].querySelector('.hash-value').textContent = formatHash(h);
+      });
+    }
+    if (algo === 'SHA-256' || algo === 'all') {
+      shaHash('SHA-256', text).then(function(h) {
+        cards[2].querySelector('.hash-value').textContent = formatHash(h);
+      });
+    }
+    if (algo === 'SHA-512' || algo === 'all') {
+      shaHash('SHA-512', text).then(function(h) {
+        cards[3].querySelector('.hash-value').textContent = formatHash(h);
+      });
+    }
+  }
+
+  /* ---- 文件哈希 ---- */
+  function computeFileHash(file) {
+    fileNameDisp.textContent = file.name;
+    fileSizeDisp.textContent = formatBytes(file.size);
+
+    var fileCardsEl = document.getElementById('fileResultCards').querySelectorAll('.hash-value');
+    fileCardsEl[0].textContent = '计算中...';
+    fileCardsEl[1].textContent = '计算中...';
+    fileCardsEl[2].textContent = '计算中...';
+    fileCardsEl[3].textContent = '计算中...';
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var buf = e.target.result;
+      fileCardsEl[0].textContent = formatHash(md5FromArrayBuffer(buf));
+      crypto.subtle.digest('SHA-1', buf).then(function(h) {
+        fileCardsEl[1].textContent = formatHash(bufToHex(h));
+      });
+      crypto.subtle.digest('SHA-256', buf).then(function(h) {
+        fileCardsEl[2].textContent = formatHash(bufToHex(h));
+      });
+      crypto.subtle.digest('SHA-512', buf).then(function(h) {
+        fileCardsEl[3].textContent = formatHash(bufToHex(h));
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function md5FromArrayBuffer(buf) {
+    var bytes = new Uint8Array(buf);
+    var str = '';
+    for (var i = 0; i < bytes.length; i++) {
+      str += String.fromCharCode(bytes[i]);
+    }
+    return md5(str);
+  }
+
+  function bufToHex(buf) {
+    return Array.from(new Uint8Array(buf)).map(function(b) {
+      return b.toString(16).padStart(2, '0');
+    }).join('');
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(2) + ' MB';
+  }
+
+  /* ---- 事件绑定 ---- */
+  textInput.addEventListener('input', function() {
+    updateTextHash('all');
+  });
+
+  window.selectAlgo = function(btn) {
+    currentAlgo = btn.getAttribute('data-algo');
+    document.querySelectorAll('#algoSelectRow .algo-btn').forEach(function(b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    updateTextHash(currentAlgo);
+  };
+
+  window.computeAllText = function() {
+    document.querySelectorAll('#algoSelectRow .algo-btn').forEach(function(b) {
+      b.classList.remove('active');
+    });
+    updateTextHash('all');
+  };
+
+  window.toggleCase = function() {
+    isUppercase = uppercaseChk.checked;
+    updateTextHash('all');
+  };
+
+  /* ---- 文件处理 ---- */
+  fileInput2.addEventListener('change', function() {
+    if (fileInput2.files[0]) computeFileHash(fileInput2.files[0]);
+    fileInput2.value = '';
+  });
+
+  window.handleFileDrop = function(e) {
+    e.preventDefault();
+    fileDropzone.style.borderColor = '';
+    if (e.dataTransfer.files[0]) computeFileHash(e.dataTransfer.files[0]);
+  };
+
+  /* ---- Tab 切换 ---- */
+  window.switchTab = function(tab) {
+    document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+    document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
+    if (tab === 'text') {
+      document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+      document.getElementById('tabText').classList.add('active');
+    } else {
+      document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+      document.getElementById('tabFile').classList.add('active');
+    }
+  };
+
+  /* ---- 复制 ---- */
+  document.getElementById('textResultCards').addEventListener('click', function(e) {
+    var val = e.target.closest('.result-card')?.querySelector('.hash-value')?.textContent;
+    if (!val || val === '—' || val === '计算中...') return;
+    navigator.clipboard.writeText(val).then(function(){showToast('已复制', 'success');});
+  });
+
+  document.getElementById('fileResultCards').addEventListener('click', function(e) {
+    var val = e.target.closest('.result-card')?.querySelector('.hash-value')?.textContent;
+    if (!val || val === '—' || val === '计算中...') return;
+    navigator.clipboard.writeText(val).then(function(){showToast('已复制', 'success');});
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>秒表</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.btn-lg{padding:12px 32px;font-size:1rem}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:32px 20px;gap:20px}
+.timer-display{font-family:var(--font-mono);font-size:4rem;font-weight:300;letter-spacing:4px;color:var(--text);padding:20px 40px;border:2px solid var(--border);background:var(--panel-bg);min-width:360px;text-align:center}
+.timer-display .ms{font-size:2rem;color:var(--text-light)}
+.btn-row{display:flex;gap:12px}
+.lap-section{width:100%;max-width:500px;border:1px solid var(--border);max-height:300px;overflow-y:auto}
+.lap-section h3{font-size:.85rem;font-weight:600;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--panel-bg);position:sticky;top:0}
+.lap-list{list-style:none}
+.lap-item{display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #eee;font-family:var(--font-mono);font-size:.85rem}
+.lap-item:last-child{border-bottom:none}
+.lap-item .lap-num{color:var(--text-light);min-width:40px}
+.lap-item .lap-time{font-weight:600}
+.lap-item .lap-total{color:var(--text-light)}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>秒表</h1></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>秒表</h3>
+<p>高精度毫秒级秒表，支持分段计时。<kbd>Space</kbd> 键快速启停。</p>
+<h3>操作</h3>
+<ul><li><strong>开始/暂停</strong>：点击按钮或按空格键，秒表从暂停处继续</li><li><strong>分段计时</strong>：秒表运行中点击"分段"，记录当前时间点</li><li><strong>重置</strong>：停止秒表并归零，清空分段记录</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="timer-display" id="timerDisplay">00:00.000</div>
+<div class="btn-row">
+<button class="btn btn-lg" id="btnStart" onclick="toggle()">开始</button>
+<button class="btn btn-lg" id="btnLap" onclick="lap()" disabled>分段</button>
+<button class="btn btn-lg" id="btnReset" onclick="reset()">重置</button>
+</div>
+<div class="lap-section" id="lapSec" style="display:none">
+<h3>分段记录</h3>
+<ul class="lap-list" id="lapList"></ul>
+</div>
+</div>
+<script>
+let st=0,el=0,tid=null,run=false,laps=[],ll=0;
+function pad(n,w){return String(n).padStart(w,'0')}
+function fmt(ms){let m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),mi=ms%1000;return pad(m,2)+':'+pad(s,2)+'.'+pad(mi,3)}
+function upd(){document.getElementById('timerDisplay').innerHTML=fmt(el).replace(/(\.\d{3})/,'<span class="ms">$1</span>')}
+function toggle(){run?pause():start()}
+function start(){if(run)return;st=Date.now()-el;tid=setInterval(()=>{el=Date.now()-st;upd()},31);run=true;document.getElementById('btnStart').textContent='暂停';document.getElementById('btnLap').disabled=false}
+function pause(){if(!run)return;clearInterval(tid);tid=null;run=false;document.getElementById('btnStart').textContent='开始';document.getElementById('btnLap').disabled=true}
+function lap(){if(!run)return;let n=Date.now()-st,d=n-ll;ll=n;laps.push({t:n,d});renderLaps();document.getElementById('lapSec').style.display='block'}
+function reset(){pause();el=0;ll=0;laps=[];upd();document.getElementById('lapList').innerHTML='';document.getElementById('lapSec').style.display='none'}
+function renderLaps(){let h='';for(let i=laps.length-1;i>=0;i--){let l=laps[i];h+='<li class="lap-item"><span class="lap-num">#'+(i+1)+'</span><span class="lap-time">+'+fmt(l.d)+'</span><span class="lap-total">'+fmt(l.t)+'</span></li>'}document.getElementById('lapList').innerHTML=h}
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.target.closest('input,textarea')){e.preventDefault();toggle()}});
+upd();
+</script>
+</body>
+</html>

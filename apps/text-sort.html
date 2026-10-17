@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文本排序去重</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.btn-sm{padding:4px 10px;font-size:.75rem}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow:hidden;display:flex;gap:0;padding:16px}
+.panel{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.panel label{font-size:.82rem;font-weight:600}
+.panel textarea{flex:1;padding:10px 14px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.85rem;line-height:1.5;resize:none;background:#fff;color:var(--text);outline:none;min-height:0}
+.panel textarea:focus{border-width:2px}
+.panel textarea::placeholder{color:#bbb}
+.control-col{width:220px;flex-shrink:0;padding:0 12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.control-col h3{font-size:.82rem;font-weight:600;border-bottom:1px solid var(--border);padding-bottom:4px}
+.opt-group{display:flex;flex-direction:column;gap:4px}
+.opt-group label{font-size:.78rem;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400}
+.opt-group input[type=radio]{accent-color:var(--accent)}
+.opt-group input[type=checkbox]{accent-color:var(--accent)}
+.stat-row{font-size:.75rem;color:var(--text-light);padding:4px 0;border-top:1px solid var(--border)}
+.stat-row span{font-weight:600;color:var(--text)}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);font-size:.82rem;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>文本排序去重</h1><div class="titlebar-controls"><button class="btn btn-sm" onclick="doSort()">排序</button><button class="btn btn-sm" onclick="copyOutput()">复制结果</button></div></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>文本排序去重</h3>
+<p>按行排序文本，支持字典序、自然排序、去重、去空行、添加行号等功能。</p>
+<ul><li><strong>字典序</strong>：按字符编码排序（a < B < c）</li><li><strong>自然排序</strong>：数字按数值而非字符排序（item2 < item10）</li><li><strong>去重</strong>：区分或忽略大小写</li><li><strong>添加行号</strong>：在每行前添加序号</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="panel"><label>输入文本（每行一条）</label><textarea id="input" placeholder="每行输入一条文本..."></textarea></div>
+<div class="control-col">
+<h3>排序方式</h3>
+<div class="opt-group">
+<label><input type="radio" name="sortMode" value="alpha" checked onchange="doSort()"> 字典序 (A-Z)</label>
+<label><input type="radio" name="sortMode" value="alpha-desc" onchange="doSort()"> 字典序倒序 (Z-A)</label>
+<label><input type="radio" name="sortMode" value="natural" onchange="doSort()"> 自然排序</label>
+<label><input type="radio" name="sortMode" value="natural-desc" onchange="doSort()"> 自然排序倒序</label>
+<label><input type="radio" name="sortMode" value="random" onchange="doSort()"> 随机打乱</label>
+<label><input type="radio" name="sortMode" value="none" onchange="doSort()"> 不排序</label>
+</div>
+<h3>选项</h3>
+<div class="opt-group">
+<label><input type="checkbox" id="chkDedup" onchange="doSort()"> 去重</label>
+<label><input type="checkbox" id="chkDedupCase" onchange="doSort()"> 去重时忽略大小写</label>
+<label><input type="checkbox" id="chkTrim" onchange="doSort()"> 去除首尾空格</label>
+<label><input type="checkbox" id="chkEmpty" onchange="doSort()"> 去除空行</label>
+<label><input type="checkbox" id="chkNum" onchange="doSort()"> 添加行号</label>
+</div>
+<button class="btn" onclick="doSort()">执行排序</button>
+<div class="stat-row">输入: <span id="inCount">0</span> 行 | 输出: <span id="outCount">0</span> 行</div>
+</div>
+<div class="panel"><label>结果</label><textarea id="output" readonly placeholder="排序结果..."></textarea></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+function naturalCompare(a,b){return a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'})}
+function doSort(){
+  let inp=document.getElementById('input').value;
+  let lines=inp.split(/\r?\n/);
+  let inCount=lines.length;
+  document.getElementById('inCount').textContent=inCount;
+
+  if(document.getElementById('chkTrim').checked)lines=lines.map(l=>l.trim());
+  if(document.getElementById('chkEmpty').checked)lines=lines.filter(l=>l!=='');
+  if(document.getElementById('chkDedup').checked){
+    if(document.getElementById('chkDedupCase').checked){
+      let seen=new Set();lines=lines.filter(l=>{let k=l.toLowerCase();if(seen.has(k))return false;seen.add(k);return true});
+    }else{
+      lines=[...new Set(lines)];
+    }
+  }
+
+  let mode=document.querySelector('input[name="sortMode"]:checked').value;
+  if(mode==='alpha')lines.sort();
+  else if(mode==='alpha-desc')lines.sort().reverse();
+  else if(mode==='natural')lines.sort(naturalCompare);
+  else if(mode==='natural-desc')lines.sort(naturalCompare).reverse();
+  else if(mode==='random'){for(let i=lines.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[lines[i],lines[j]]=[lines[j],lines[i]]}}
+
+  if(document.getElementById('chkNum').checked)lines=lines.map((l,i)=>(i+1)+'. '+l);
+
+  document.getElementById('output').value=lines.join('\n');
+  document.getElementById('outCount').textContent=lines.length;
+}
+function copyOutput(){let v=document.getElementById('output').value;if(!v)return;navigator.clipboard.writeText(v).then(()=>toast('已复制'))}
+function toast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('show'),1500)}
+doSort();
+</script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML实体编解码</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.btn-sm{padding:4px 10px;font-size:.75rem}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.tab-row{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{padding:8px 18px;border:none;background:#fff;font-size:.85rem;cursor:pointer;color:var(--text-light);border-bottom:2px solid transparent;font-family:inherit;transition:all .1s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);font-weight:600;border-bottom-color:var(--border)}
+.radio-row{display:flex;gap:16px;align-items:center;padding:4px 0}
+.radio-row label{font-size:.82rem;display:flex;align-items:center;gap:4px;cursor:pointer}
+.radio-row input[type=radio]{accent-color:var(--accent)}
+.section{display:flex;flex-direction:column;gap:4px}
+.section label{font-size:.82rem;font-weight:600}
+.section textarea{width:100%;padding:10px 14px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.85rem;line-height:1.5;resize:none;background:#fff;color:var(--text);min-height:140px;outline:none}
+.section textarea:focus{border-width:2px}
+.section textarea::placeholder{color:#bbb}
+.result-area{background:var(--panel-bg)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);font-size:.82rem;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>HTML实体编解码</h1><div class="titlebar-controls"><button class="btn btn-sm" onclick="doConvert()">转换</button><button class="btn btn-sm" onclick="swapIO()">交换</button></div></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>HTML实体编解码</h3>
+<p>文本与HTML字符实体双向转换，支持命名实体、十进制和十六进制数字实体。</p>
+<ul><li><strong>编码</strong>：将 &lt; &gt; &amp; &quot; &#39; 等特殊字符转为实体</li><li><strong>解码</strong>：将 &amp;xxx; / &amp;#NNN; / &amp;#xHH; 还原为字符</li><li>支持全部命名实体（&amp;lt; &amp;gt; &amp;amp; &amp;quot; &amp;apos; &amp;nbsp; 等）</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="tab-row">
+<button class="tab active" onclick="switchTab('encode',this)">编码（文本 → 实体）</button>
+<button class="tab" onclick="switchTab('decode',this)">解码（实体 → 文本）</button>
+</div>
+<div id="encPanel">
+<div class="radio-row">
+<label><input type="radio" name="encFmt" value="name" checked onchange="doConvert()">命名实体</label>
+<label><input type="radio" name="encFmt" value="dec" onchange="doConvert()">十进制 &amp;#NNN;</label>
+<label><input type="radio" name="encFmt" value="hex" onchange="doConvert()">十六进制 &amp;#xHH;</label>
+</div>
+<div class="section"><label>输入文本</label><textarea id="encInput" placeholder="输入需要编码的HTML文本..." oninput="autoConvert()"></textarea></div>
+<div class="section"><label>实体结果 <button class="btn btn-sm" onclick="copyText('encOutput')">复制</button></label><textarea id="encOutput" class="result-area" readonly placeholder="编码结果..."></textarea></div>
+</div>
+<div id="decPanel" style="display:none">
+<div class="section"><label>HTML实体文本</label><textarea id="decInput" placeholder="输入 &amp;lt;div&amp;gt; 等实体文本..." oninput="autoConvert()"></textarea></div>
+<div class="section"><label>解码结果 <button class="btn btn-sm" onclick="copyText('decOutput')">复制</button></label><textarea id="decOutput" class="result-area" readonly placeholder="解码结果..."></textarea></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+let curTab='encode',autoTimer=null;
+const entityMap={'"':'&quot;','&':'&amp;',"'":'&apos;','<':'&lt;','>':'&gt;','\u00A0':'&nbsp;','\u00A1':'&iexcl;','\u00A2':'&cent;','\u00A3':'&pound;','\u00A4':'&curren;','\u00A5':'&yen;','\u00A6':'&brvbar;','\u00A7':'&sect;','\u00A8':'&uml;','\u00A9':'&copy;','\u00AA':'&ordf;','\u00AB':'&laquo;','\u00AC':'&not;','\u00AD':'&shy;','\u00AE':'&reg;','\u00AF':'&macr;','\u00B0':'&deg;','\u00B1':'&plusmn;','\u00B2':'&sup2;','\u00B6':'&para;','\u00B7':'&middot;','\u00D7':'&times;','\u00F7':'&divide;','\u20AC':'&euro;','\u2122':'&trade;'};
+const revEntityMap={};
+for(let[k,v]of Object.entries(entityMap))revEntityMap[v]=k;
+
+function switchTab(t,btn){curTab=t;document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('encPanel').style.display=t==='encode'?'block':'none';document.getElementById('decPanel').style.display=t==='decode'?'block':'none';doConvert()}
+function autoConvert(){clearTimeout(autoTimer);autoTimer=setTimeout(doConvert,300)}
+function doConvert(){if(curTab==='encode')doEncode();else doDecode()}
+
+function doEncode(){
+  let inp=document.getElementById('encInput').value,out;
+  if(!inp){document.getElementById('encOutput').value='';return}
+  let fmt=document.querySelector('input[name="encFmt"]:checked').value;
+  if(fmt==='name')out=inp.replace(/["&'<>\u00A0-\u00AF\u00B0-\u00FF\u20AC\u2122]/g,c=>entityMap[c]||'&#'+c.charCodeAt(0)+';');
+  else if(fmt==='dec')out=[...inp].map(c=>{let code=c.charCodeAt(0);return code>127||c==='<'||c==='>'||c==='&'||c==='"'?('&#'+code+';'):c}).join('');
+  else out=[...inp].map(c=>{let code=c.charCodeAt(0);return code>127||c==='<'||c==='>'||c==='&'||c==='"'?('&#x'+code.toString(16).toUpperCase()+';'):c}).join('');
+  document.getElementById('encOutput').value=out;
+}
+
+function doDecode(){
+  let inp=document.getElementById('decInput').value;
+  if(!inp){document.getElementById('decOutput').value='';return}
+  let txt=inp;
+  txt=txt.replace(/&([a-zA-Z]+);/g,(m,e)=>revEntityMap[m]||m);
+  txt=txt.replace(/&#x([0-9a-fA-F]+);/g,(m,h)=>String.fromCharCode(parseInt(h,16)));
+  txt=txt.replace(/&#(\d+);/g,(m,d)=>String.fromCharCode(parseInt(d,10)));
+  document.getElementById('decOutput').value=txt;
+}
+
+function swapIO(){
+  if(curTab==='encode'){let a=document.getElementById('encInput'),b=document.getElementById('encOutput');[a.value,b.value]=[b.value,a.value];doConvert()}
+  else{let a=document.getElementById('decInput'),b=document.getElementById('decOutput');[a.value,b.value]=[b.value,a.value];doConvert()}
+}
+function copyText(id){let v=document.getElementById(id).value;if(!v)return;navigator.clipboard.writeText(v).then(()=>toast('已复制'))}
+function toast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('show'),1500)}
+</script>
+</body>
+</html>

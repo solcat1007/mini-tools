@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UUID / 随机字符串生成器</title>
+<style>
+/* ============================================================
+   白色极简主题 — 纯白底 + 黑字 + 黑边框
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --panel-bg: #fafafa;
+  --text: #111111;
+  --text-light: #555555;
+  --border: #000000;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --success: #111111;
+  --danger: #cc0000;
+  --radius: 0px;
+  --font-mono: "Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace;
+  --font-sans: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans); background: var(--bg); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* 使用说明面板 */
+.help-panel {
+  border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-shrink: 0;
+}
+.help-toggle {
+  padding: 10px 16px; font-size:0.82rem; font-weight:600; cursor:pointer;
+  user-select:none; list-style:none; color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.help-toggle::-webkit-details-marker { display:none; }
+.help-toggle::before { content: '▶ '; font-size:0.7rem; display:inline-block; transition:transform 0.15s; }
+details[open] .help-toggle::before { transform: rotate(90deg); }
+.help-content {
+  padding: 12px 16px; font-size:0.78rem; line-height:1.7; color: var(--text);
+  background: #fff; border-bottom: 1px solid var(--border);
+}
+.help-content h3 { font-size:0.9rem; margin-bottom:6px; font-weight:700; }
+.help-content h4 { font-size:0.8rem; margin:8px 0 4px; font-weight:600; }
+.help-content ul { padding-left:18px; margin:4px 0; }
+.help-content li { margin:2px 0; }
+.help-content table { border-collapse:collapse; width:100%; margin:6px 0; font-size:0.75rem; }
+.help-content th, .help-content td { border:1px solid var(--border); padding:4px 8px; text-align:left; }
+.help-content th { background: #f5f5f5; font-weight:600; }
+.help-content code { background:#f0f0f0; padding:1px 4px; font-family:var(--font-mono); font-size:0.72rem; }
+
+/* 标题栏 */
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; height: 44px; background: #fafafa;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  user-select: none;
+}
+.titlebar-title { font-size:0.9rem; font-weight:600; }
+.titlebar-actions { display:flex; gap:6px; }
+
+/* 按钮 */
+.btn {
+  padding: 5px 12px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.82rem; cursor: pointer;
+  font-family: inherit; white-space: nowrap; transition: all 0.1s;
+}
+.btn:hover { background: var(--accent); color:#fff; }
+.btn.primary { background:var(--accent); color:#fff; }
+.btn.primary:hover { background:var(--accent-hover); }
+
+/* 标签页 */
+.tab-row {
+  display: flex; gap: 0; padding: 8px 16px 0; flex-shrink: 0;
+}
+.tab-btn {
+  padding: 8px 18px; border: 1px solid var(--border); border-bottom: none;
+  background: #fafafa; color: var(--text-light);
+  font-size: 0.85rem; cursor: pointer; font-family: inherit;
+  margin-right: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: #fff; color: var(--text); font-weight:600; border-bottom: 2px solid var(--border); }
+
+.main {
+  flex:1; display:flex; overflow:hidden; min-height:0;
+}
+.tab-content { display:none; flex:1; flex-direction:column; overflow:hidden; gap:14px; }
+.tab-content.active { display:flex; }
+
+/* 文本输入框 */
+textarea, input[type="text"], input[type="number"], select {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  font-family: inherit; outline: none;
+}
+textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(original - 1px); }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:50px; left:50%; transform:translateX(-50%);
+  background:var(--accent); color:#fff; padding:10px 24px;
+  font-size:0.85rem; z-index:999;
+  opacity:0; transition:opacity 0.2s; pointer-events:none;
+  border: 1px solid var(--border);
+}
+.toast.show { opacity:1; }
+.toast.success { background:var(--success); }
+.toast.error { background:var(--danger); }
+
+/* UUID 工具专用样式 */
+.uuid-display {
+  background: #fafafa; border: 1px solid var(--border);
+  padding: 20px; text-align: center;
+}
+.uuid-value {
+  font-family: var(--font-mono); font-size: 1.4rem; color: var(--text);
+  word-break: break-all; margin-bottom: 4px;
+}
+.uuid-meta { font-size:0.65rem; color:var(--text-light); }
+.batch-controls { display:flex; align-items:center; gap:10px; flex-wrap: wrap; padding: 0; }
+.batch-controls label { font-size:0.78rem; color:var(--text-light); }
+.batch-controls select, .batch-controls input {
+  padding:4px 8px; border:1px solid var(--border); background:#fff; color:var(--text); font-family:inherit;
+}
+.batch-controls select { width:80px; }
+.batch-list {
+  flex:1; overflow-y:auto; background:#fff; border:1px solid var(--border);
+  padding:8px; font-family:var(--font-mono);
+  font-size:0.78rem; color:var(--text); line-height:1.8; display:none;
+}
+.batch-list.show { display:block; }
+.string-form { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; padding: 0; }
+.form-field { display:flex; flex-direction:column; gap:3px; }
+.form-field label { font-size:0.7rem; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; }
+.form-field input { width:80px; padding:5px 8px; border:1px solid var(--border); background:#fff; color:var(--text); font-family:var(--font-mono); font-size:0.82rem; }
+.check-group { display:flex; gap:14px; flex-wrap:wrap; margin-top:4px; }
+.check-item { font-size:0.78rem; display:flex; align-items:center; gap:4px; cursor:pointer; }
+.string-result { background: #fafafa; border: 1px solid var(--border); padding: 16px; margin: 0; }
+.string-value { font-family: var(--font-mono); font-size: 1.2rem; color: var(--text); word-break: break-all; margin-bottom: 8px; line-height: 1.6; }
+.string-meta { font-size:0.68rem; color:var(--text-light); }
+
+/* === Auto-fix: shared utility styles === */
+.toolbar {
+  display: flex; align-items: center; gap: 6px; padding: 6px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.toolbar-btn:hover { background: var(--accent); color: #fff; }
+.toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+.toolbar-hint { font-size: 0.7rem; color: var(--text-light); margin-left: auto; }
+.titlebar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.titlebar-btn:hover { background: var(--accent); color: #fff; }
+.accent { background: var(--accent); color: #fff; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+.stats {
+  display: flex; gap: 16px; padding: 6px 16px; font-size: 0.72rem;
+  color: var(--text-light); flex-shrink: 0; border-top: 1px solid var(--border);
+  background: #fafafa;
+}
+.stat-item { display: flex; align-items: center; gap: 4px; }
+.stat-val { color: var(--text); font-weight: 600; font-family: var(--font-mono); }
+.statusbar {
+  display: flex; align-items: center; gap: 12px; padding: 6px 16px;
+  font-size: 0.72rem; color: var(--text-light);
+  border-top: 1px solid var(--border); background: #fafafa; flex-shrink: 0;
+}
+.status-item { display: flex; align-items: center; gap: 4px; }
+.status-count { color: var(--text); font-weight: 600; }
+.context-menu {
+  position: fixed; background: #fff; border: 1px solid var(--border);
+  padding: 6px 0; z-index: 1000; display: none; min-width: 160px;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+}
+.context-menu.show { display: block; }
+.context-item {
+  padding: 8px 16px; font-size: 0.82rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background 0.1s;
+}
+.context-item:hover { background: #f0f0f0; }
+.context-shortcut { font-size: 0.7rem; color: var(--text-light); }
+.editor-area { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+.result-area { display: flex; flex-direction: column; overflow: hidden; }
+.panel-body { flex: 1; display: flex; overflow: hidden; }
+.divider {
+  width: 4px; cursor: col-resize; background: #f0f0f0;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.divider:hover, .divider.active { background: var(--border); }
+.drop-highlight { border: 2px dashed var(--accent) !important; background: #fafafa !important; }
+.info { padding: 14px; color: var(--text-light); font-size: 0.82rem; }
+.indent-select {
+  padding: 2px 6px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.75rem; font-family: inherit;
+}
+.valid { border-color: #000 !important; }
+.invalid { border-color: var(--danger) !important; }
+.error-msg { color: var(--danger); font-size: var(--font-mono); padding: 4px 0; }
+.no-match { color: var(--text-light); font-size: 0.85rem; }
+/* regex-tester */
+.regex-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+}
+.regex-row input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; }
+.flag-options { display: flex; gap: 4px; }
+.flag-options .btn { padding: 3px 10px; font-size: 0.75rem; }
+.flag-options .btn.active { background: var(--accent); color: #fff; }
+.editor-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.editor-wrap textarea { flex: 1; padding: 12px; border: none; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; outline: none; }
+.presets { display: flex; gap: 4px; padding: 6px 16px; flex-shrink: 0; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.preset-btn { padding: 3px 10px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+.preset-btn:hover { background: var(--accent); color: #fff; }
+.match-text { color: var(--text); font-weight: 600; }
+.match-groups { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-light); }
+/* screenshot-tool */
+.tool-group { display: flex; gap: 2px; }
+.tool-label { font-size: 0.7rem; color: var(--text-light); margin-bottom: 2px; }
+.stroke-select { padding: 2px 4px; border: 1px solid var(--border); font-size: 0.72rem; }
+.selected { background: var(--accent) !important; color: #fff !important; }
+.canvas-container {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #f0f0f0; overflow: hidden; position: relative;
+}
+.canvas-placeholder { color: var(--text-light); font-size: 1.2rem; }
+/* color-picker */
+.color-preview {
+  width: 100%; height: 120px; border: 1px solid var(--border);
+  cursor: pointer; transition: background 0.2s;
+}
+.picker-section { display: flex; flex-direction: column; gap: 10px; }
+.mid-section { display: flex; gap: 10px; }
+.right-section { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.color-row { display: flex; align-items: center; gap: 8px; }
+.color-values { display: flex; flex-direction: column; gap: 4px; }
+.section-title { font-size: 0.72rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; }
+.info-block { font-size: 0.78rem; line-height: 1.6; color: var(--text); }
+.info-block .key { font-weight: 600; }
+.favorites-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.card { background: #fff; border: 1px solid var(--border); padding: 8px; font-size: 0.75rem; }
+.export-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; background: #fafafa; border: 1px solid var(--border); }
+.eyedropper-overlay { position: fixed; inset: 0; z-index: 999; cursor: crosshair; }
+.eyedropper-magnifier { width: 30px; height: 30px; border: 2px solid var(--border); border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+.eyedropper-label { font-size: 0.75rem; color: var(--text-light); }
+/* base64-tool */
+.text-panel { display: flex; flex-direction: column; overflow: hidden; }
+.text-row { display: flex; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+.text-actions { display: flex; gap: 4px; }
+.img-panel { display: flex; flex-direction: column; overflow: hidden; }
+.img-actions { display: flex; gap: 4px; padding: 8px 16px; flex-shrink: 0; }
+.col-header { font-size: 0.78rem; font-weight: 600; padding: 8px 16px; background: #fafafa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.col-body { flex: 1; overflow: hidden; display: flex; }
+.text-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.img-result { max-width: 100%; max-height: 300px; object-fit: contain; }
+.img-dropzone {
+  flex: 1; min-height: 160px; border: 2px dashed var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s; background: #fafafa; margin: 8px;
+}
+.img-dropzone:hover { border-color: var(--accent); background: #f5f5f5; }
+.placeholder { color: var(--text-light); font-size: 0.85rem; }
+/* qrcode-tool */
+.input-section { display: flex; gap: 8px; padding: 12px 16px; flex-shrink: 0; }
+.input-section textarea { flex: 1; padding: 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; min-height: 60px; }
+.qr-section {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #fafafa; overflow: hidden;
+}
+.qr-placeholder { color: var(--text-light); font-size: 1.1rem; }
+.size-row { display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+/* timer */
+.mode-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.mode-tab {
+  padding: 8px 18px; border: none; border-right: 1px solid var(--border);
+  background: #fafafa; color: var(--text-light); font-size: 0.85rem;
+  cursor: pointer; font-family: inherit;
+}
+.mode-tab:hover { color: var(--text); }
+.mode-tab.active { background: #fff; color: var(--text); font-weight: 600; }
+.controls { display: flex; justify-content: center; gap: 8px; padding: 12px; flex-shrink: 0; }
+.control-btn {
+  padding: 8px 18px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.85rem; cursor: pointer; font-family: inherit;
+}
+.control-btn:hover { background: var(--accent); color: #fff; }
+.control-btn.start { background: var(--accent); color: #fff; }
+.control-btn.pause { background: #f5f5f5; }
+.control-btn.reset { color: var(--danger); }
+.settings-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; flex-shrink: 0; }
+.time-input-row { display: flex; align-items: center; gap: 8px; }
+.time-input-row input { width: 60px; padding: 4px 8px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; text-align: center; }
+.progress-bar { height: 4px; background: #f0f0f0; flex-shrink: 0; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.pomodoro-section { display: flex; flex-direction: column; gap: 8px; padding: 8px 16px; }
+.phase-list { display: flex; flex-direction: column; gap: 4px; }
+.phase-name { font-size: 0.8rem; color: var(--text); font-weight: 500; }
+.phase-time { font-size: 0.72rem; color: var(--text-light); font-family: var(--font-mono); }
+.phase-status { font-size: 0.7rem; }
+.phase-icon { margin-right: 4px; }
+.add-phase-form { display: flex; gap: 6px; align-items: center; padding: 8px 0; }
+.add-phase-form input { padding: 4px 8px; border: 1px solid var(--border); font-size: 0.78rem; width: 100px; }
+.shortcut-hint { font-size: 0.65rem; color: var(--text-light); text-align: center; padding: 4px; }
+/* json formatter result types */
+.success { color: var(--text); }
+.error { color: var(--danger); }
+/* base64 image dropzone text cols */
+.img-dropzone .dz-icon { font-size: 2.5rem; }
+.img-dropzone .dz-text { color: var(--text-light); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<details class="help-panel" open>
+  <summary class="help-toggle">使用说明</summary>
+  <div class="help-content">
+### UUID / 随机字符串生成器
+UUID v4 生成器与自定义随机字符串生成器。
+
+**主要功能**
+- UUID v4：基于 crypto.getRandomValues 生成标准 UUID
+- 批量生成：1~100 个 UUID，列表展示
+- 格式选项：去除连字符、大写/小写切换
+- 一键复制单个/全部，支持导出 TXT
+- 随机字符串：自定义长度（4~256），可选字符集
+
+**注意事项**
+- UUID v4 基于随机数，碰撞概率极低
+- 随机字符串的字符集至少选择一种
+  </div>
+</details>
+
+<div class="titlebar">
+  <span class="titlebar-title">🔑 UUID / 随机字符串生成器</span>
+  <div class="titlebar-actions">
+    <label style="display:flex;align-items:center;gap:4px;font-size:0.72rem;cursor:pointer;margin-right:8px;">
+      <input type="checkbox" id="removeHyphens"> 去除连字符
+    </label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:0.72rem;cursor:pointer;margin-right:8px;">
+      <input type="checkbox" id="uppercaseChk"> 大写
+    </label>
+    <button class="btn primary" onclick="copyCurrent()">📋 复制</button>
+    <button class="btn" onclick="exportTXT()">💾 导出 TXT</button>
+  </div>
+</div>
+
+<div class="tab-row">
+  <button class="tab-btn active" onclick="switchTab('uuid')">🆔 UUID v4</button>
+  <button class="tab-btn" onclick="switchTab('string')">🔤 随机字符串</button>
+</div>
+
+<div class="main">
+  <!-- UUID Tab -->
+  <div class="tab-content active" id="tabUUID">
+    <div class="uuid-display">
+      <div class="uuid-value" id="uuidValue">d9b2d63d-a233-4123-847a-7685b2e8ba11</div>
+      <div class="uuid-meta" id="uuidMeta">UUID v4 · 128位 · 变体 DCE 1.1</div>
+    </div>
+    <div class="batch-controls">
+      <button class="btn primary" onclick="generateUUID()">🎲 生成新 UUID</button>
+      <label>批量生成：</label>
+      <select id="batchCount" onchange="onBatchChange()">
+        <option value="1">1</option><option value="5">5</option><option value="10" selected>10</option>
+        <option value="20">20</option><option value="50">50</option><option value="100">100</option>
+      </select>
+      <button class="btn" onclick="generateBatch()">生成</button>
+      <button class="btn" id="copyAllBtn" onclick="copyAllUUIDs()" style="display:none;">📋 复制全部</button>
+    </div>
+    <div class="batch-list" id="batchList"></div>
+  </div>
+
+  <!-- 随机字符串 Tab -->
+  <div class="tab-content" id="tabString">
+    <div class="string-form">
+      <div class="form-field">
+        <label>字符串长度</label>
+        <input type="number" id="strLength" min="4" max="256" value="32">
+      </div>
+      <button class="btn primary" onclick="generateString()">🎲 生成</button>
+      <button class="btn" onclick="copyString()">📋 复制</button>
+    </div>
+    <div class="check-group">
+      <label class="check-item"><input type="checkbox" id="chkUpper" checked> A-Z 大写字母</label>
+      <label class="check-item"><input type="checkbox" id="chkLower" checked> a-z 小写字母</label>
+      <label class="check-item"><input type="checkbox" id="chkDigit" checked> 0-9 数字</label>
+      <label class="check-item"><input type="checkbox" id="chkSymbol"> !@#$ 符号</label>
+    </div>
+    <div class="string-result">
+      <div class="string-value" id="stringValue">点击"生成"按钮创建随机字符串</div>
+      <div class="string-meta" id="stringMeta"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  var uuidValue = document.getElementById('uuidValue');
+  var uuidMeta = document.getElementById('uuidMeta');
+  var batchList = document.getElementById('batchList');
+  var copyAllBtn = document.getElementById('copyAllBtn');
+  var batchCount = document.getElementById('batchCount');
+  var removeHyphens = document.getElementById('removeHyphens');
+  var uppercaseChk = document.getElementById('uppercaseChk');
+  var stringValue = document.getElementById('stringValue');
+  var stringMeta = document.getElementById('stringMeta');
+  var toastEl = document.getElementById('toast');
+
+  var currentUUIDs = [];
+
+  var toastTimer = null;
+  function showToast(msg, type) {
+    if (toastTimer) clearTimeout(toastTimer);
+    toastEl.textContent = msg; toastEl.className = 'toast ' + (type||'') + ' show';
+    toastTimer = setTimeout(function(){toastEl.classList.remove('show');}, 2000);
+  }
+
+  /**
+   * 生成 UUID v4（基于 crypto.getRandomValues）
+   */
+  function generateUUIDv4() {
+    var buf = new Uint8Array(16);
+    crypto.getRandomValues(buf);
+    // 设置 UUID v4 特征位
+    buf[6] = (buf[6] & 0x0f) | 0x40;  // version 4
+    buf[8] = (buf[8] & 0x3f) | 0x80;  // variant DCE 1.1
+    var parts = [];
+    for (var i = 0; i < 16; i++) {
+      parts.push(buf[i].toString(16).padStart(2, '0'));
+      if (i === 3 || i === 5 || i === 7 || i === 9) parts.push('-');
+    }
+    return parts.join('');
+  }
+
+  /**
+   * 格式化 UUID（去掉连字符 + 大小写）
+   */
+  function formatUUID(uuid) {
+    var str = uuid;
+    if (removeHyphens.checked) str = str.replace(/-/g, '');
+    if (uppercaseChk.checked) str = str.toUpperCase();
+    return str;
+  }
+
+  /**
+   * 随机字符串生成
+   */
+  function generateRandomString(len, upper, lower, digit, symbol) {
+    var chars = '';
+    if (upper) chars += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (lower) chars += 'abcdefghijklmnopqrstuvwxyz';
+    if (digit) chars += '0123456789';
+    if (symbol) chars += '!@#$%^&*()-_=+[]{}|;:,.<>?/~';
+    if (!chars) return '至少选择一个字符集';
+
+    var arr = new Uint8Array(len);
+    crypto.getRandomValues(arr);
+    var result = '';
+    for (var i = 0; i < len; i++) {
+      result += chars[arr[i] % chars.length];
+    }
+    return result;
+  }
+
+  /* ---- UUID 操作 ---- */
+  window.generateUUID = function() {
+    var uuid = generateUUIDv4();
+    currentUUIDs = [uuid];
+    uuidValue.textContent = formatUUID(uuid);
+    uuidMeta.textContent = 'UUID v4 · 128位 · 变体 DCE 1.1 · ' + new Date().toLocaleTimeString();
+    batchList.classList.remove('show');
+    copyAllBtn.style.display = 'none';
+  };
+
+  window.generateBatch = function() {
+    var count = parseInt(batchCount.value) || 10;
+    currentUUIDs = [];
+    for (var i = 0; i < count; i++) {
+      currentUUIDs.push(generateUUIDv4());
+    }
+    // 显示第一个在顶部
+    uuidValue.textContent = formatUUID(currentUUIDs[0]);
+    uuidMeta.textContent = '共 ' + count + ' 个 UUID · ' + new Date().toLocaleTimeString();
+
+    // 渲染列表
+    var html = '';
+    for (var k = 0; k < currentUUIDs.length; k++) {
+      html += formatUUID(currentUUIDs[k]) + '\n';
+    }
+    batchList.textContent = html.trim();
+    batchList.classList.add('show');
+    copyAllBtn.style.display = '';
+    showToast('已生成 ' + count + ' 个 UUID', 'success');
+  };
+
+  window.copyCurrent = function() {
+    var text = uuidValue.textContent;
+    if (!text || text === '—') return;
+    navigator.clipboard.writeText(text).then(function(){showToast('已复制', 'success');});
+  };
+
+  window.copyAllUUIDs = function() {
+    if (currentUUIDs.length === 0) return;
+    var text = currentUUIDs.map(function(u){return formatUUID(u);}).join('\n');
+    navigator.clipboard.writeText(text).then(function(){showToast('已复制 ' + currentUUIDs.length + ' 个 UUID', 'success');});
+  };
+
+  window.exportTXT = function() {
+    if (currentUUIDs.length === 0) { showToast('请先生成 UUID'); return; }
+    var text = currentUUIDs.map(function(u){return formatUUID(u);}).join('\r\n');
+    var blob = new Blob([text], {type:'text/plain'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'uuids_' + new Date().toISOString().slice(0,10) + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('已导出', 'success');
+  };
+
+  /* 监听选项变化 */
+  removeHyphens.addEventListener('change', function() {
+    if (currentUUIDs.length > 0) {
+      uuidValue.textContent = formatUUID(currentUUIDs[0]);
+      var html = '';
+      for (var i = 0; i < currentUUIDs.length; i++) {
+        html += formatUUID(currentUUIDs[i]) + '\n';
+      }
+      batchList.textContent = html.trim();
+    }
+  });
+  uppercaseChk.addEventListener('change', function() {
+    if (currentUUIDs.length > 0) {
+      uuidValue.textContent = formatUUID(currentUUIDs[0]);
+      var html = '';
+      for (var i = 0; i < currentUUIDs.length; i++) {
+        html += formatUUID(currentUUIDs[i]) + '\n';
+      }
+      batchList.textContent = html.trim();
+    }
+  });
+
+  window.onBatchChange = function() {
+    // 仅 UI 交互，生成由按钮触发
+  };
+
+  /* ---- 随机字符串 ---- */
+  window.generateString = function() {
+    var len = parseInt(document.getElementById('strLength').value) || 32;
+    if (len < 4) len = 4;
+    if (len > 256) len = 256;
+
+    var upper = document.getElementById('chkUpper').checked;
+    var lower = document.getElementById('chkLower').checked;
+    var digit = document.getElementById('chkDigit').checked;
+    var symbol = document.getElementById('chkSymbol').checked;
+
+    var result = generateRandomString(len, upper, lower, digit, symbol);
+    var charset = [];
+    if (upper) charset.push('A-Z');
+    if (lower) charset.push('a-z');
+    if (digit) charset.push('0-9');
+    if (symbol) charset.push('符号');
+
+    stringValue.textContent = result;
+    stringMeta.textContent = '长度: ' + len + ' · 字符集: ' + charset.join(', ') + ' · 熵值: ~' + Math.floor(len * Math.log2(charset.length + (symbol?15:0))) + ' bits · ' + new Date().toLocaleTimeString();
+  };
+
+  window.copyString = function() {
+    var text = stringValue.textContent;
+    if (!text || text === '点击"生成"按钮创建随机字符串') return;
+    navigator.clipboard.writeText(text).then(function(){showToast('已复制', 'success');});
+  };
+
+  /* ---- Tab 切换 ---- */
+  window.switchTab = function(tab) {
+    document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+    document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
+    if (tab === 'uuid') {
+      document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+      document.getElementById('tabUUID').classList.add('active');
+    } else {
+      document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+      document.getElementById('tabString').classList.add('active');
+    }
+  };
+
+  /* 键盘快捷键：Ctrl+C 复制当前 UUID */
+  document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'c' && !e.target.closest('textarea, input[type=text], input[type=number]')) {
+      // 允许浏览器默认复制行为
+    }
+  });
+
+  // 初始化：生成第一个 UUID
+  generateUUID();
+})();
+</script>
+</body>
+</html>

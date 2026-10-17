@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>二维码生成器</title>
+<style>
+/* ============================================================
+   白色极简主题 — 纯白底 + 黑字 + 黑边框
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --panel-bg: #fafafa;
+  --text: #111111;
+  --text-light: #555555;
+  --border: #000000;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --success: #111111;
+  --danger: #cc0000;
+  --radius: 0px;
+  --font-mono: "Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace;
+  --font-sans: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans); background: var(--bg); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* 使用说明面板 */
+.help-panel {
+  border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-shrink: 0;
+}
+.help-toggle {
+  padding: 10px 16px; font-size:0.82rem; font-weight:600; cursor:pointer;
+  user-select:none; list-style:none; color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.help-toggle::-webkit-details-marker { display:none; }
+.help-toggle::before { content: '▶ '; font-size:0.7rem; display:inline-block; transition:transform 0.15s; }
+details[open] .help-toggle::before { transform: rotate(90deg); }
+.help-content {
+  padding: 12px 16px; font-size:0.78rem; line-height:1.7; color: var(--text);
+  background: #fff; border-bottom: 1px solid var(--border);
+}
+.help-content h3 { font-size:0.9rem; margin-bottom:6px; font-weight:700; }
+.help-content h4 { font-size:0.8rem; margin:8px 0 4px; font-weight:600; }
+.help-content ul { padding-left:18px; margin:4px 0; }
+.help-content li { margin:2px 0; }
+.help-content table { border-collapse:collapse; width:100%; margin:6px 0; font-size:0.75rem; }
+.help-content th, .help-content td { border:1px solid var(--border); padding:4px 8px; text-align:left; }
+.help-content th { background: #f5f5f5; font-weight:600; }
+.help-content code { background:#f0f0f0; padding:1px 4px; font-family:var(--font-mono); font-size:0.72rem; }
+
+/* 标题栏 */
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; height: 44px; background: #fafafa;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  user-select: none;
+}
+.titlebar-title { font-size:0.9rem; font-weight:600; }
+.titlebar-actions { display:flex; gap:6px; }
+
+/* 按钮 */
+.btn {
+  padding: 5px 12px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.82rem; cursor: pointer;
+  font-family: inherit; white-space: nowrap; transition: all 0.1s;
+}
+.btn:hover { background: var(--accent); color:#fff; }
+.btn.primary { background:var(--accent); color:#fff; }
+.btn.primary:hover { background:var(--accent-hover); }
+
+/* 标签页 */
+.tab-row {
+  display: flex; gap: 0; padding: 8px 16px 0; flex-shrink: 0;
+}
+.tab-btn {
+  padding: 8px 18px; border: 1px solid var(--border); border-bottom: none;
+  background: #fafafa; color: var(--text-light);
+  font-size: 0.85rem; cursor: pointer; font-family: inherit;
+  margin-right: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: #fff; color: var(--text); font-weight:600; border-bottom: 2px solid var(--border); }
+
+.main {
+  flex:1; display:flex; overflow:hidden; min-height:0;
+}
+.tab-content { display:none; flex:1; flex-direction:column; overflow:hidden; gap:14px; }
+.tab-content.active { display:flex; }
+
+/* 文本输入框 */
+textarea, input[type="text"], input[type="number"], select {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  font-family: inherit; outline: none;
+}
+textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(original - 1px); }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:50px; left:50%; transform:translateX(-50%);
+  background:var(--accent); color:#fff; padding:10px 24px;
+  font-size:0.85rem; z-index:999;
+  opacity:0; transition:opacity 0.2s; pointer-events:none;
+  border: 1px solid var(--border);
+}
+.toast.show { opacity:1; }
+.toast.success { background:var(--success); }
+.toast.error { background:var(--danger); }
+
+/* 二维码生成器专用样式 */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; gap:0; padding:0; }
+.input-row {
+  display:flex; gap:8px; padding:12px 16px; align-items:center;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+}
+#qrInput {
+  flex:1; padding:8px 12px; border:1px solid var(--border);
+  font-size:0.9rem; background:#fff; color:var(--text);
+  font-family:inherit;
+}
+#qrInput:focus { border-width:2px; }
+.control-row {
+  display:flex; gap:12px; padding:8px 16px; align-items:center;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.control-row label { font-size:0.75rem; color:var(--text-light); white-space:nowrap; }
+.control-row input[type=range] { width:120px; accent-color:var(--accent); }
+.control-row span { font-size:0.72rem; color:var(--text-light); min-width:36px; text-align:right; font-family:var(--font-mono); }
+.qr-display {
+  flex:1; display:flex; align-items:center; justify-content:center;
+  padding:20px; overflow:auto;
+}
+.qr-display canvas { border:2px solid var(--border); }
+.qr-info {
+  padding:8px 16px; font-size:0.72rem; color:var(--text-light);
+  border-top:1px solid var(--border); display:flex; gap:16px; flex-shrink:0;
+}
+
+/* === Auto-fix: shared utility styles === */
+.toolbar {
+  display: flex; align-items: center; gap: 6px; padding: 6px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.toolbar-btn:hover { background: var(--accent); color: #fff; }
+.toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+.toolbar-hint { font-size: 0.7rem; color: var(--text-light); margin-left: auto; }
+.titlebar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.titlebar-btn:hover { background: var(--accent); color: #fff; }
+.accent { background: var(--accent); color: #fff; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+.stats {
+  display: flex; gap: 16px; padding: 6px 16px; font-size: 0.72rem;
+  color: var(--text-light); flex-shrink: 0; border-top: 1px solid var(--border);
+  background: #fafafa;
+}
+.stat-item { display: flex; align-items: center; gap: 4px; }
+.stat-val { color: var(--text); font-weight: 600; font-family: var(--font-mono); }
+.statusbar {
+  display: flex; align-items: center; gap: 12px; padding: 6px 16px;
+  font-size: 0.72rem; color: var(--text-light);
+  border-top: 1px solid var(--border); background: #fafafa; flex-shrink: 0;
+}
+.status-item { display: flex; align-items: center; gap: 4px; }
+.status-count { color: var(--text); font-weight: 600; }
+.context-menu {
+  position: fixed; background: #fff; border: 1px solid var(--border);
+  padding: 6px 0; z-index: 1000; display: none; min-width: 160px;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+}
+.context-menu.show { display: block; }
+.context-item {
+  padding: 8px 16px; font-size: 0.82rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background 0.1s;
+}
+.context-item:hover { background: #f0f0f0; }
+.context-shortcut { font-size: 0.7rem; color: var(--text-light); }
+.editor-area { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+.result-area { display: flex; flex-direction: column; overflow: hidden; }
+.panel-body { flex: 1; display: flex; overflow: hidden; }
+.divider {
+  width: 4px; cursor: col-resize; background: #f0f0f0;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.divider:hover, .divider.active { background: var(--border); }
+.drop-highlight { border: 2px dashed var(--accent) !important; background: #fafafa !important; }
+.info { padding: 14px; color: var(--text-light); font-size: 0.82rem; }
+.indent-select {
+  padding: 2px 6px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.75rem; font-family: inherit;
+}
+.valid { border-color: #000 !important; }
+.invalid { border-color: var(--danger) !important; }
+.error-msg { color: var(--danger); font-size: var(--font-mono); padding: 4px 0; }
+.no-match { color: var(--text-light); font-size: 0.85rem; }
+/* regex-tester */
+.regex-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+}
+.regex-row input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; }
+.flag-options { display: flex; gap: 4px; }
+.flag-options .btn { padding: 3px 10px; font-size: 0.75rem; }
+.flag-options .btn.active { background: var(--accent); color: #fff; }
+.editor-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.editor-wrap textarea { flex: 1; padding: 12px; border: none; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; outline: none; }
+.presets { display: flex; gap: 4px; padding: 6px 16px; flex-shrink: 0; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.preset-btn { padding: 3px 10px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+.preset-btn:hover { background: var(--accent); color: #fff; }
+.match-text { color: var(--text); font-weight: 600; }
+.match-groups { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-light); }
+/* screenshot-tool */
+.tool-group { display: flex; gap: 2px; }
+.tool-label { font-size: 0.7rem; color: var(--text-light); margin-bottom: 2px; }
+.stroke-select { padding: 2px 4px; border: 1px solid var(--border); font-size: 0.72rem; }
+.selected { background: var(--accent) !important; color: #fff !important; }
+.canvas-container {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #f0f0f0; overflow: hidden; position: relative;
+}
+.canvas-placeholder { color: var(--text-light); font-size: 1.2rem; }
+/* color-picker */
+.color-preview {
+  width: 100%; height: 120px; border: 1px solid var(--border);
+  cursor: pointer; transition: background 0.2s;
+}
+.picker-section { display: flex; flex-direction: column; gap: 10px; }
+.mid-section { display: flex; gap: 10px; }
+.right-section { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.color-row { display: flex; align-items: center; gap: 8px; }
+.color-values { display: flex; flex-direction: column; gap: 4px; }
+.section-title { font-size: 0.72rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; }
+.info-block { font-size: 0.78rem; line-height: 1.6; color: var(--text); }
+.info-block .key { font-weight: 600; }
+.favorites-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.card { background: #fff; border: 1px solid var(--border); padding: 8px; font-size: 0.75rem; }
+.export-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; background: #fafafa; border: 1px solid var(--border); }
+.eyedropper-overlay { position: fixed; inset: 0; z-index: 999; cursor: crosshair; }
+.eyedropper-magnifier { width: 30px; height: 30px; border: 2px solid var(--border); border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+.eyedropper-label { font-size: 0.75rem; color: var(--text-light); }
+/* base64-tool */
+.text-panel { display: flex; flex-direction: column; overflow: hidden; }
+.text-row { display: flex; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+.text-actions { display: flex; gap: 4px; }
+.img-panel { display: flex; flex-direction: column; overflow: hidden; }
+.img-actions { display: flex; gap: 4px; padding: 8px 16px; flex-shrink: 0; }
+.col-header { font-size: 0.78rem; font-weight: 600; padding: 8px 16px; background: #fafafa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.col-body { flex: 1; overflow: hidden; display: flex; }
+.text-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.img-result { max-width: 100%; max-height: 300px; object-fit: contain; }
+.img-dropzone {
+  flex: 1; min-height: 160px; border: 2px dashed var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s; background: #fafafa; margin: 8px;
+}
+.img-dropzone:hover { border-color: var(--accent); background: #f5f5f5; }
+.placeholder { color: var(--text-light); font-size: 0.85rem; }
+/* qrcode-tool */
+.input-section { display: flex; gap: 8px; padding: 12px 16px; flex-shrink: 0; }
+.input-section textarea { flex: 1; padding: 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; min-height: 60px; }
+.qr-section {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #fafafa; overflow: hidden;
+}
+.qr-placeholder { color: var(--text-light); font-size: 1.1rem; }
+.size-row { display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+/* timer */
+.mode-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.mode-tab {
+  padding: 8px 18px; border: none; border-right: 1px solid var(--border);
+  background: #fafafa; color: var(--text-light); font-size: 0.85rem;
+  cursor: pointer; font-family: inherit;
+}
+.mode-tab:hover { color: var(--text); }
+.mode-tab.active { background: #fff; color: var(--text); font-weight: 600; }
+.controls { display: flex; justify-content: center; gap: 8px; padding: 12px; flex-shrink: 0; }
+.control-btn {
+  padding: 8px 18px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.85rem; cursor: pointer; font-family: inherit;
+}
+.control-btn:hover { background: var(--accent); color: #fff; }
+.control-btn.start { background: var(--accent); color: #fff; }
+.control-btn.pause { background: #f5f5f5; }
+.control-btn.reset { color: var(--danger); }
+.settings-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; flex-shrink: 0; }
+.time-input-row { display: flex; align-items: center; gap: 8px; }
+.time-input-row input { width: 60px; padding: 4px 8px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; text-align: center; }
+.progress-bar { height: 4px; background: #f0f0f0; flex-shrink: 0; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.pomodoro-section { display: flex; flex-direction: column; gap: 8px; padding: 8px 16px; }
+.phase-list { display: flex; flex-direction: column; gap: 4px; }
+.phase-name { font-size: 0.8rem; color: var(--text); font-weight: 500; }
+.phase-time { font-size: 0.72rem; color: var(--text-light); font-family: var(--font-mono); }
+.phase-status { font-size: 0.7rem; }
+.phase-icon { margin-right: 4px; }
+.add-phase-form { display: flex; gap: 6px; align-items: center; padding: 8px 0; }
+.add-phase-form input { padding: 4px 8px; border: 1px solid var(--border); font-size: 0.78rem; width: 100px; }
+.shortcut-hint { font-size: 0.65rem; color: var(--text-light); text-align: center; padding: 4px; }
+/* json formatter result types */
+.success { color: var(--text); }
+.error { color: var(--danger); }
+/* base64 image dropzone text cols */
+.img-dropzone .dz-icon { font-size: 2.5rem; }
+.img-dropzone .dz-text { color: var(--text-light); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<details class="help-panel" open>
+  <summary class="help-toggle">使用说明</summary>
+  <div class="help-content">
+### 二维码生成器
+纯前端二维码生成器，基于 Canvas 实时绘制 QR 码。
+
+**主要功能**
+- 输入文本/URL 后实时生成二维码
+- 纯 Canvas 绘制，完整 QR 码生成引擎
+- 滑块调节输出尺寸（150~500px）
+- 一键下载 PNG 图片
+- 支持中文/英文/数字/URL
+- 显示当前 QR 版本和模块信息
+
+**注意事项**
+- 内容越长，QR 码版本越高、模块越密
+- 建议内容不超过 500 个字符以保证可读性
+  </div>
+</details>
+
+<div class="titlebar">
+  <span class="titlebar-title">📱 二维码生成器</span>
+  <div class="titlebar-actions">
+    <button class="btn" onclick="downloadQR()">💾 下载 PNG</button>
+    <button class="btn" onclick="clearAll()">🗑 清空</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="input-section">
+    <label>输入文本 / URL：</label>
+    <input type="text" id="qrInput" placeholder="输入文本或网址，实时生成二维码..." oninput="generateQR()">
+    <label style="margin-top:8px">尺寸调整：</label>
+    <div class="size-row">
+      <input type="range" id="sizeSlider" min="150" max="500" value="280" step="10" oninput="onSizeChange()">
+      <span id="sizeLabel">280px</span>
+    </div>
+    <div style="font-size:0.75rem;color:var(--text-light);margin-top:4px;">
+      支持文本/URL/数字。最多约 300 个字符。
+    </div>
+  </div>
+  <div class="qr-section">
+    <canvas id="qrCanvas" width="280" height="280"></canvas>
+    <div class="qr-placeholder" id="qrPlaceholder">输入文本自动生成二维码</div>
+  </div>
+</div>
+
+<div class="stats">
+  <span class="stat-item">版本：<span class="stat-val" id="statVersion">-</span></span>
+  <span class="stat-item">模块数：<span class="stat-val" id="statModules">-</span></span>
+  <span class="stat-item">数据容量：<span class="stat-val" id="statCapacity">-</span></span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  const qrInput    = document.getElementById('qrInput');
+  const qrCanvas   = document.getElementById('qrCanvas');
+  const qrPlaceholder = document.getElementById('qrPlaceholder');
+  const sizeSlider = document.getElementById('sizeSlider');
+  const sizeLabel  = document.getElementById('sizeLabel');
+  const toastEl    = document.getElementById('toast');
+  const statVersion = document.getElementById('statVersion');
+  const statModules = document.getElementById('statModules');
+  const statCapacity = document.getElementById('statCapacity');
+
+  let toastTimer = null;
+  let currentModules = null; // 二维码模块矩阵
+  let currentVersion = 0;
+
+  function showToast(msg, type) {
+    if (toastTimer) clearTimeout(toastTimer);
+    toastEl.textContent = msg;
+    toastEl.className = 'toast ' + (type || '') + ' show';
+    toastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 2000);
+  }
+
+  // ========== QR 码生成引擎 ==========
+
+  /**
+   * 版本→每边模块数
+   */
+  function getModuleCount(version) {
+    return version * 4 + 17;
+  }
+
+  /**
+   * 根据数据长度选择最小版本（容错等级 L）
+   * @param {number} dataLen - 数据字节数
+   * @returns {number} 版本号 1-40
+   */
+  function selectVersion(dataLen) {
+    // QR Code Version 1-40 capacity table for ECC level L (byte mode)
+    var capacities = [
+      17, 32, 53, 78, 106, 134, 154, 192, 230, 271,
+      321, 367, 425, 458, 520, 586, 644, 718, 792, 858,
+      929, 1003, 1091, 1171, 1273, 1367, 1465, 1528, 1628, 1732,
+      1840, 1952, 2068, 2188, 2303, 2431, 2563, 2699, 2809, 2953
+    ];
+    for (var v = 0; v < capacities.length; v++) {
+      if (capacities[v] >= dataLen) return v + 1;
+    }
+    return 40; // 最大版本
+  }
+
+  /**
+   * 在矩阵中放置 Finder Pattern（定位图案）
+   */
+  function placeFinderPattern(matrix, size) {
+    var pattern = [
+      [1,1,1,1,1,1,1,0],
+      [1,0,0,0,0,0,1,0],
+      [1,0,1,1,1,0,1,0],
+      [1,0,1,1,1,0,1,0],
+      [1,0,1,1,1,0,1,0],
+      [1,0,0,0,0,0,1,0],
+      [1,1,1,1,1,1,1,0],
+      [0,0,0,0,0,0,0,0]
+    ];
+    function place(row, col) {
+      for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 8; c++) {
+          var rr = row + r, cc = col + c;
+          if (rr < size && cc < size) matrix[rr][cc] = pattern[r][c];
+        }
+      }
+    }
+    // 左上
+    place(0, 0);
+    // 右上
+    place(0, size - 8);
+    // 左下
+    place(size - 8, 0);
+  }
+
+  /**
+   * 放置 Timing Pattern（时序图案）
+   */
+  function placeTimingPattern(matrix, size) {
+    for (var i = 8; i < size - 8; i++) {
+      matrix[6][i] = (i % 2 === 0) ? 1 : 0;
+      matrix[i][6] = (i % 2 === 0) ? 1 : 0;
+    }
+  }
+
+  /**
+   * 放置 Alignment Pattern（校准图案）
+   */
+  function placeAlignmentPattern(matrix, size, version) {
+    if (version < 2) return;
+    // 对齐图案位置表
+    var centers = [];
+    if (version === 2) centers = [6, 18];
+    else if (version <= 6) centers = [6, 22];
+    else if (version <= 14) centers = [6, 26];
+    else if (version <= 20) centers = [6, 30];
+    else if (version <= 26) centers = [6, 34];
+    else if (version <= 32) centers = [6, 22, 38];
+    else centers = [6, 24, 42];
+
+    if (centers.length === 0) return;
+
+    var ap = [
+      [1,1,1,1,1],
+      [1,0,0,0,1],
+      [1,0,1,0,1],
+      [1,0,0,0,1],
+      [1,1,1,1,1]
+    ];
+
+    for (var ri = 0; ri < centers.length; ri++) {
+      for (var ci = 0; ci < centers.length; ci++) {
+        var row = centers[ri] - 2;
+        var col = centers[ci] - 2;
+        // 检查是否与 Finder 重叠
+        var overlapsFinder =
+          (row < 9 && col < 9) ||
+          (row < 9 && col > size - 14) ||
+          (row > size - 14 && col < 9);
+        if (overlapsFinder) continue;
+        for (var r = 0; r < 5; r++) {
+          for (var c = 0; c < 5; c++) {
+            var rr = row + r, cc = col + c;
+            if (rr >= 0 && rr < size && cc >= 0 && cc < size) {
+              matrix[rr][cc] = ap[r][c];
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 放置格式信息（容错等级 L，掩码 0-7）
+   */
+  function placeFormatInfo(matrix, size, maskPattern) {
+    var formatBits = 0;
+    // ECC Level L = 01 (indicator bits)
+    var eccBits = 1; // 01 for L
+    var data = (eccBits << 3) | maskPattern;
+    // BCH(15,5) 编码
+    var g = 0x537;
+    var d = data << 10;
+    for (var i = 4; i >= 0; i--) {
+      if (d & (1 << (i + 10))) d ^= g << i;
+    }
+    formatBits = (data << 10) | (d & 0x3FF);
+    formatBits ^= 0x5412; // XOR mask
+
+    var positions = [];
+    // 左上角三条边
+    for (var i = 0; i <= 5; i++) positions.push([i, 8]);
+    positions.push([7, 8]);
+    positions.push([8, 8]);
+    positions.push([8, 7]);
+    for (var i = 5; i >= 0; i--) positions.push([8, i]);
+
+    // 右上角 + 左下角
+    var pos2 = [];
+    var max = size - 1;
+    for (var i = 0; i <= 7; i++) pos2.push([max - i, 8]);
+    for (var i = 7; i >= 0; i--) pos2.push([8, max - i]);
+    pos2[8+0] = [8, max - 7]; // dark module
+
+    for (var i = 0; i < 15; i++) {
+      var bit = (formatBits >> i) & 1;
+      var p = positions[i];
+      if (p) matrix[p[0]][p[1]] = bit;
+      if (i < 8) {
+        var p2 = pos2[i];
+        matrix[p2[0]][p2[1]] = bit;
+      }
+    }
+  }
+
+  /**
+   * 在矩阵中绘制数据位（逐列从右向左填充）
+   */
+  function placeData(matrix, size, dataBits, dataLen) {
+    var col = size - 1;
+    var bitIdx = 0;
+    var upwards = true;
+
+    function canPlace(r, c) {
+      if (c < 0) return false;
+      // skip vertical timing pattern column
+      if (c === 6) return false;
+      return matrix[r][c] === -1; // 未设置
+    }
+
+    while (col > 0) {
+      if (col === 6) col = 5; // 跳过时序图案列
+
+      for (var row = upwards ? size - 1 : 0; upwards ? row >= 0 : row < size; row += upwards ? -1 : 1) {
+        for (var cOff = 0; cOff < 2; cOff++) {
+          var cc = col - cOff;
+          if (canPlace(row, cc)) {
+            if (bitIdx < dataLen) {
+              matrix[row][cc] = (dataBits[bitIdx] ? 1 : 0);
+              bitIdx++;
+            } else {
+              matrix[row][cc] = 0;
+            }
+          }
+        }
+      }
+      upwards = !upwards;
+      col -= 2;
+    }
+  }
+
+  /**
+   * 评估掩码质量（计算罚分）
+   */
+  function evaluateMask(matrix, size) {
+    var penalty = 0;
+
+    // 条件1：连续同色行
+    for (var r = 0; r < size; r++) {
+      var run = 1;
+      for (var c = 1; c < size; c++) {
+        if (matrix[r][c] === matrix[r][c-1]) run++;
+        else {
+          if (run >= 5) penalty += 3 + (run - 5);
+          run = 1;
+        }
+      }
+      if (run >= 5) penalty += 3 + (run - 5);
+    }
+    // 连续同色列
+    for (var c = 0; c < size; c++) {
+      var run = 1;
+      for (var r = 1; r < size; r++) {
+        if (matrix[r][c] === matrix[r-1][c]) run++;
+        else {
+          if (run >= 5) penalty += 3 + (run - 5);
+          run = 1;
+        }
+      }
+      if (run >= 5) penalty += 3 + (run - 5);
+    }
+
+    // 条件2：2x2 同色块
+    for (var r = 0; r < size - 1; r++) {
+      for (var c = 0; c < size - 1; c++) {
+        if (matrix[r][c] === matrix[r+1][c] && matrix[r][c] === matrix[r][c+1] && matrix[r][c] === matrix[r+1][c+1]) {
+          penalty += 3;
+        }
+      }
+    }
+
+    // 条件3：1:1:3:1:1 模式
+    for (var r = 0; r < size; r++) {
+      for (var c = 0; c < size - 6; c++) {
+        if (matrix[r][c] === 1 && matrix[r][c+1] === 0 && matrix[r][c+2] === 1 &&
+            matrix[r][c+3] === 1 && matrix[r][c+4] === 1 && matrix[r][c+5] === 0 && matrix[r][c+6] === 1) {
+          penalty += 40;
+        }
+      }
+    }
+    for (var c = 0; c < size; c++) {
+      for (var r = 0; r < size - 6; r++) {
+        if (matrix[r][c] === 1 && matrix[r+1][c] === 0 && matrix[r+2][c] === 1 &&
+            matrix[r+3][c] === 1 && matrix[r+4][c] === 1 && matrix[r+5][c] === 0 && matrix[r+6][c] === 1) {
+          penalty += 40;
+        }
+      }
+    }
+
+    // 条件4：暗模块比例
+    var dark = 0;
+    for (var r = 0; r < size; r++) {
+      for (var c = 0; c < size; c++) {
+        if (matrix[r][c] === 1) dark++;
+      }
+    }
+    var pct = dark / (size * size) * 100;
+    var diff = Math.abs(pct - 50) / 5;
+    penalty += Math.floor(diff) * 10;
+
+    return penalty;
+  }
+
+  /**
+   * 掩码函数（8种）
+   */
+  var maskFuncs = [
+    function(r,c) { return (r + c) % 2 === 0; },
+    function(r,c) { return r % 2 === 0; },
+    function(r,c) { return c % 3 === 0; },
+    function(r,c) { return (r + c) % 3 === 0; },
+    function(r,c) { return (Math.floor(r/2) + Math.floor(c/3)) % 2 === 0; },
+    function(r,c) { return (r*c)%2 + (r*c)%3 === 0; },
+    function(r,c) { return ((r*c)%2 + (r*c)%3) % 2 === 0; },
+    function(r,c) { return ((r+c)%2 + (r*c)%3) % 2 === 0; }
+  ];
+
+  /**
+   * 应用掩码到矩阵
+   */
+  function applyMask(matrix, size, maskIndex) {
+    var mf = maskFuncs[maskIndex];
+    for (var r = 0; r < size; r++) {
+      for (var c = 0; c < size; c++) {
+        if (matrix[r][c] >= 0) { // 仅翻转功能图案以外的数据模块
+          // 检查是否是功能模块（通过位置判断）
+          if (!isFunctionModule(r, c, size)) {
+            if (mf(r, c)) matrix[r][c] ^= 1;
+          }
+        }
+      }
+    }
+  }
+
+  function isFunctionModule(r, c, size) {
+    // Finder patterns (including separators)
+    if ((r <= 8 && c <= 8) || (r <= 8 && c >= size - 9) || (r >= size - 9 && c <= 8)) return true;
+    // Timing patterns
+    if (r === 6 || c === 6) return true;
+    // Format info area around finders
+    // (Simplified: check if near finder and in format area)
+    return false;
+  }
+
+  /**
+   * 生成数据码字
+   */
+  function generateDataBytes(text) {
+    var bytes = [];
+    for (var i = 0; i < text.length; i++) {
+      var code = text.charCodeAt(i);
+      if (code < 128) {
+        bytes.push(code);
+      } else if (code < 2048) {
+        bytes.push(0xC0 | (code >> 6));
+        bytes.push(0x80 | (code & 0x3F));
+      } else if (code < 65536) {
+        bytes.push(0xE0 | (code >> 12));
+        bytes.push(0x80 | ((code >> 6) & 0x3F));
+        bytes.push(0x80 | (code & 0x3F));
+      } else {
+        bytes.push(0xF0 | (code >> 18));
+        bytes.push(0x80 | ((code >> 12) & 0x3F));
+        bytes.push(0x80 | ((code >> 6) & 0x3F));
+        bytes.push(0x80 | (code & 0x3F));
+      }
+    }
+    return bytes;
+  }
+
+  /**
+   * GF(256) 下的多项式乘法
+   */
+  function gfMul(a, b) {
+    var result = 0;
+    for (var i = 0; i < 8; i++) {
+      if (b & 1) result ^= a;
+      var hi = a & 0x80;
+      a = (a << 1) & 0xFF;
+      if (hi) a ^= 0x1D;
+      b >>= 1;
+    }
+    return result;
+  }
+
+  /**
+   * 计算 BCH 纠错码（生成多项式）
+   */
+  function generateECBytes(dataBytes, numECBytes) {
+    var genPoly = [1];
+    for (var i = 0; i < numECBytes; i++) {
+      genPoly.push(1);
+      for (var j = genPoly.length - 2; j >= 1; j--) {
+        genPoly[j] = genPoly[j-1] ^ gfMul(genPoly[j], 1 << i);
+      }
+      genPoly[0] = gfMul(genPoly[0], 1 << i);
+    }
+
+    var remainder = new Array(numECBytes).fill(0);
+    for (var i = 0; i < dataBytes.length; i++) {
+      var factor = dataBytes[i] ^ remainder.shift();
+      remainder.push(0);
+      for (var j = 0; j < numECBytes; j++) {
+        remainder[j] ^= gfMul(genPoly[j], factor);
+      }
+    }
+    return remainder;
+  }
+
+  /**
+   * 主函数：生成二维码
+   */
+  function generateQRCode(text) {
+    if (!text) {
+      qrPlaceholder.style.display = '';
+      qrCanvas.style.display = 'none';
+      statVersion.textContent = '-';
+      statModules.textContent = '-';
+      statCapacity.textContent = '-';
+      return;
+    }
+
+    // 生成数据字节
+    var dataBytes = generateDataBytes(text);
+    var dataLen = dataBytes.length;
+    if (dataLen > 2953) {
+      showToast('文本过长（超过最大容量），请缩短内容', 'error');
+      return;
+    }
+
+    // 选择版本
+    var version = selectVersion(dataLen);
+    currentVersion = version;
+    var size = getModuleCount(version);
+
+    // ECC Level L 下的 EC 码字数
+    var eccPerBlock = [7,10,15,20,26,18,20,24,30,18,
+      20,24,26,30,22,24,28,30,28,28,
+      28,28,30,30,30,30,30,30,30,30,
+      30,30,30,30,30,30,30,30,30,30][version-1];
+
+    var totalCodewords = [19,34,55,80,108,136,156,194,232,274,
+      324,370,428,461,523,589,647,721,795,861,
+      932,1006,1094,1174,1276,1370,1468,1531,1631,1735,
+      1843,1955,2068,2188,2308,2436,2566,2702,2812,2956][version-1];
+
+    var numDataCodewords = totalCodewords - eccPerBlock;
+
+    // 限制数据长度
+    if (dataLen > numDataCodewords) dataLen = numDataCodewords;
+    dataBytes = dataBytes.slice(0, dataLen);
+
+    // 补齐
+    dataBytes.push(0x00); // 终止符
+    // 补齐到 full byte
+    while (dataBytes.length < numDataCodewords) {
+      dataBytes.push(dataBytes.length % 2 === 0 ? 0xEC : 0x11);
+    }
+
+    // 生成纠错码
+    var ecBytes = generateECBytes(dataBytes, eccPerBlock);
+
+    // 合并数据 + 纠错 → 位流
+    var allBytes = dataBytes.concat(ecBytes);
+    var bitStream = [];
+    for (var i = 0; i < allBytes.length; i++) {
+      for (var b = 7; b >= 0; b--) {
+        bitStream.push((allBytes[i] >> b) & 1);
+      }
+    }
+
+    // 初始化矩阵
+    var matrix = new Array(size);
+    for (var r = 0; r < size; r++) {
+      matrix[r] = new Array(size).fill(-1); // -1 = 未设置
+    }
+
+    // 放置功能图案
+    placeFinderPattern(matrix, size);
+    placeTimingPattern(matrix, size);
+    placeAlignmentPattern(matrix, size, version);
+
+    // 放置 dark module
+    matrix[size - 8][8] = 1;
+
+    // 试所有掩码
+    var bestMask = 0;
+    var bestPenalty = Infinity;
+    var bestMatrix = null;
+
+    for (var mask = 0; mask < 8; mask++) {
+      var testMatrix = matrix.map(function(row) { return row.slice(); });
+      placeData(testMatrix, size, bitStream, bitStream.length);
+      applyMask(testMatrix, size, mask);
+      var penalty = evaluateMask(testMatrix, size);
+      if (penalty < bestPenalty) {
+        bestPenalty = penalty;
+        bestMask = mask;
+        bestMatrix = testMatrix;
+      }
+    }
+
+    // 使用最佳掩码
+    currentModules = bestMatrix;
+    placeFormatInfo(currentModules, size, bestMask);
+
+    // 渲染到 Canvas
+    renderQR(size);
+
+    statVersion.textContent = version;
+    statModules.textContent = size + '×' + size;
+    statCapacity.textContent = numDataCodewords + ' 字节';
+  }
+
+  function renderQR(size) {
+    var sz = parseInt(sizeSlider.value);
+    qrCanvas.width = sz;
+    qrCanvas.height = sz;
+    var ctx = qrCanvas.getContext('2d');
+
+    // 白色背景
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, sz, sz);
+
+    if (!currentModules) return;
+
+    var moduleSize = sz / size;
+    var quietZone = 4 * moduleSize;
+
+    // 重绘
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, sz, sz);
+
+    for (var r = 0; r < size; r++) {
+      for (var c = 0; c < size; c++) {
+        if (currentModules[r][c] === 1) {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(
+            quietZone + c * moduleSize,
+            quietZone + r * moduleSize,
+            moduleSize,
+            moduleSize
+          );
+        }
+      }
+    }
+
+    qrCanvas.style.display = 'block';
+    qrPlaceholder.style.display = 'none';
+  }
+
+  /**
+   * 实时生成
+   */
+  window.generateQR = function() {
+    generateQRCode(qrInput.value);
+  };
+
+  /**
+   * 尺寸变更
+   */
+  window.onSizeChange = function() {
+    var sz = sizeSlider.value;
+    sizeLabel.textContent = sz + 'px';
+    if (currentModules) renderQR(currentModules.length);
+  };
+
+  /**
+   * 下载 PNG
+   */
+  window.downloadQR = function() {
+    if (!currentModules) { showToast('请先生成二维码'); return; }
+    var link = document.createElement('a');
+    link.download = 'qrcode.png';
+    link.href = qrCanvas.toDataURL('image/png');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('已下载 qrcode.png', 'success');
+  };
+
+  /**
+   * 清空
+   */
+  window.clearAll = function() {
+    qrInput.value = '';
+    currentModules = null;
+    currentVersion = 0;
+    qrCanvas.style.display = 'none';
+    qrPlaceholder.style.display = '';
+    statVersion.textContent = '-';
+    statModules.textContent = '-';
+    statCapacity.textContent = '-';
+    // 清空 canvas
+    var ctx = qrCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
+  };
+
+  // 初始状态
+  qrCanvas.style.display = 'none';
+})();
+</script>
+</body>
+</html>

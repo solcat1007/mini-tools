@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>颜色格式转换器</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.btn-sm{padding:4px 10px;font-size:.75rem}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.picker-row{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap}
+.picker-col{flex:1;min-width:280px;display:flex;flex-direction:column;gap:8px}
+.color-preview{width:100%;height:100px;border:1px solid var(--border);min-height:80px}
+.format-label{font-size:.78rem;font-weight:600;color:var(--text-light);margin-bottom:2px}
+.format-input{display:flex;gap:0;border:1px solid var(--border)}
+.format-input input{flex:1;padding:8px 10px;border:none;background:#fff;font-family:var(--font-mono);font-size:.85rem;color:var(--text);outline:none}
+.format-input input:focus{border-width:0;box-shadow:inset 0 0 0 2px var(--border)}
+.format-input .copy-btn{border:none;border-left:1px solid var(--border);background:#fff;color:var(--text);padding:8px 12px;cursor:pointer;font-size:.75rem;font-family:inherit}
+.format-input .copy-btn:hover{background:var(--accent);color:#fff}
+.input-area{display:flex;gap:0;border:1px solid var(--border);margin-bottom:4px}
+.input-area input{flex:1;padding:10px 14px;border:none;background:#fff;font-family:var(--font-mono);font-size:.9rem;color:var(--text);outline:none}
+.input-area input:focus{box-shadow:inset 0 0 0 2px var(--border)}
+.input-area input::placeholder{color:#bbb}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);font-size:.82rem;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>颜色格式转换器</h1></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>颜色格式转换器</h3>
+<p>HEX / RGB / HSL / HSV 四向互转，输入任意格式自动转换其余三种。</p>
+<ul><li>支持格式：<code>#ff6600</code>、<code>#f60</code>、<code>rgb(255,102,0)</code>、<code>hsl(24,100%,50%)</code>、<code>hsv(24,100%,100%)</code></li><li>HEX 支持带#和不带#输入</li><li>点击各格式旁的复制按钮可单独复制</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="input-area"><input type="text" id="colorInput" placeholder="输入颜色值，如 #ff6600、rgb(255,102,0)、hsl(24,100%,50%)..." oninput="convert()"></div>
+<div class="picker-row">
+<div class="picker-col"><div class="color-preview" id="preview"></div></div>
+</div>
+<div class="format-label">HEX</div><div class="format-input"><input id="hexOut" readonly><button class="copy-btn" onclick="copy('hexOut')">复制</button></div>
+<div class="format-label">RGB</div><div class="format-input"><input id="rgbOut" readonly><button class="copy-btn" onclick="copy('rgbOut')">复制</button></div>
+<div class="format-label">HSL</div><div class="format-input"><input id="hslOut" readonly><button class="copy-btn" onclick="copy('hslOut')">复制</button></div>
+<div class="format-label">HSV</div><div class="format-input"><input id="hsvOut" readonly><button class="copy-btn" onclick="copy('hsvOut')">复制</button></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+function copy(id){let v=document.getElementById(id).value;if(!v)return;navigator.clipboard.writeText(v).then(()=>toast('已复制'))}
+function toast(msg){let t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('show'),1500)}
+
+function parseColor(raw){
+  let s=raw.trim();if(!s)return null;
+  // hex
+  let m=s.match(/^#?([0-9a-fA-F]{3,8})$/);
+  if(m){
+    let h=m[1];
+    if(h.length===3||h.length===4){h=[...h].map(c=>c+c).join('');}
+    if(h.length===6){return{r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)}}
+    if(h.length===8){return{r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)}}
+    return null;
+  }
+  // rgb
+  m=s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+  if(m)return{r:Math.min(255,+m[1]),g:Math.min(255,+m[2]),b:Math.min(255,+m[3])};
+  // hsl
+  m=s.match(/^hsl\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*\)$/);
+  if(m){
+    let h=+m[1]%360,s=Math.min(100,+m[2])/100,l=Math.min(100,+m[3])/100;
+    return hslToRgb(h,s,l);
+  }
+  // hsv
+  m=s.match(/^hsv\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*\)$/);
+  if(m){
+    let h=+m[1]%360,s=Math.min(100,+m[2])/100,v=Math.min(100,+m[3])/100;
+    return hsvToRgb(h,s,v);
+  }
+  return null;
+}
+
+function hslToRgb(h,s,l){
+  let c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2,r1,g1,b1;
+  if(h<60){r1=c;g1=x;b1=0}else if(h<120){r1=x;g1=c;b1=0}else if(h<180){r1=0;g1=c;b1=x}else if(h<240){r1=0;g1=x;b1=c}else if(h<300){r1=x;g1=0;b1=c}else{r1=c;g1=0;b1=x}
+  return{r:Math.round((r1+m)*255),g:Math.round((g1+m)*255),b:Math.round((b1+m)*255)}
+}
+
+function hsvToRgb(h,s,v){
+  let c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c,r1,g1,b1;
+  if(h<60){r1=c;g1=x;b1=0}else if(h<120){r1=x;g1=c;b1=0}else if(h<180){r1=0;g1=c;b1=x}else if(h<240){r1=0;g1=x;b1=c}else if(h<300){r1=x;g1=0;b1=c}else{r1=c;g1=0;b1=x}
+  return{r:Math.round((r1+m)*255),g:Math.round((g1+m)*255),b:Math.round((b1+m)*255)}
+}
+
+function rgbToHsl(r,g,b){
+  r/=255;g/=255;b/=255;let max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min,l=(max+min)/2;
+  if(d===0)return{h:0,s:0,l:Math.round(l*100)};
+  let s=l>.5?d/(2-max-min):d/(max+min),h;
+  if(max===r)h=((g-b)/d+(g<b?6:0))*60;else if(max===g)h=((b-r)/d+2)*60;else h=((r-g)/d+4)*60;
+  return{h:Math.round(h),s:Math.round(s*100),l:Math.round(l*100)}
+}
+
+function rgbToHsv(r,g,b){
+  r/=255;g/=255;b/=255;let max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;
+  if(d===0)return{h:0,s:0,v:Math.round(max*100)};
+  let h;
+  if(max===r)h=((g-b)/d+(g<b?6:0))*60;else if(max===g)h=((b-r)/d+2)*60;else h=((r-g)/d+4)*60;
+  return{h:Math.round(h),s:Math.round(d/max*100),v:Math.round(max*100)}
+}
+
+function convert(){
+  let c=parseColor(document.getElementById('colorInput').value);
+  if(!c){document.getElementById('hexOut').value='';document.getElementById('rgbOut').value='';document.getElementById('hslOut').value='';document.getElementById('hsvOut').value='';document.getElementById('preview').style.background='transparent';return}
+  let r=c.r,g=c.g,b=c.b;
+  document.getElementById('hexOut').value='#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+  document.getElementById('rgbOut').value='rgb('+r+', '+g+', '+b+')';
+  let hsl=rgbToHsl(r,g,b);
+  document.getElementById('hslOut').value='hsl('+hsl.h+', '+hsl.s+'%, '+hsl.l+'%)';
+  let hsv=rgbToHsv(r,g,b);
+  document.getElementById('hsvOut').value='hsv('+hsv.h+', '+hsv.s+'%, '+hsv.v+'%)';
+  document.getElementById('preview').style.background='rgb('+r+','+g+','+b+')';
+}
+</script>
+</body>
+</html>
