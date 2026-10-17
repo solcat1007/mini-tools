@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emoji查找器</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:16px;gap:10px}
+.search-bar{display:flex;gap:0;border:1px solid var(--border);flex-shrink:0}
+.search-bar input{flex:1;padding:10px 14px;border:none;background:#fff;font-size:.9rem;color:var(--text);outline:none}
+.search-bar input:focus{box-shadow:inset 0 0 0 2px var(--border)}
+.search-bar input::placeholder{color:#bbb}
+.cat-row{display:flex;gap:0;flex-wrap:wrap;flex-shrink:0}
+.cat-btn{padding:5px 12px;border:1px solid var(--border);border-right:none;background:#fff;font-size:.75rem;cursor:pointer;color:var(--text-light);font-family:inherit;transition:all .1s}
+.cat-btn:last-child{border-right:1px solid var(--border)}
+.cat-btn:hover{color:var(--text)}
+.cat-btn.active{background:var(--accent);color:#fff}
+.emoji-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;align-content:start}
+.emoji-item{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;border:1px solid var(--border);cursor:pointer;transition:all .1s;background:#fff}
+.emoji-item:hover{background:var(--accent);color:#fff}
+.emoji-item .emoji{font-size:1.4rem;line-height:1.2}
+.emoji-item .code{font-size:.55rem;font-family:var(--font-mono);color:var(--text-light);margin-top:2px}
+.emoji-item:hover .code{color:#ccc}
+.detail-bar{flex-shrink:0;border:1px solid var(--border);padding:6px 12px;font-size:.78rem;text-align:center;min-height:32px}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);font-size:.82rem;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>Emoji查找器</h1></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>Emoji查找器</h3>
+<p>内置常用 Emoji 库，按分类浏览或关键词搜索，点击复制到剪贴板。</p>
+<ul><li>点击分类按钮浏览不同类别的 Emoji</li><li>搜索框输入关键词（中文/英文）实时过滤</li><li>点击任意 Emoji 复制到剪贴板，并显示 Unicode 码点</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="search-bar"><input id="searchInput" placeholder="搜索Emoji，如：笑、heart、猫..." oninput="renderEmoji()"></div>
+<div class="cat-row" id="catRow"></div>
+<div class="emoji-grid" id="emojiGrid"></div>
+<div class="detail-bar" id="detailBar">点击 Emoji 复制到剪贴板</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const emojiData=[
+  {cat:'表情',items:['😀','😃','😄','😁','😅','🤣','😂','🙂','😊','😇','😍','🤩','😘','😗','😚','😋','😜','🤪','😝','🤑','🤗','🤔','🤐','😐','😑','😶','😏','😒','🙄','😬','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','😵','🤯','😎','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😢','😭','😤','😡','🤬','😈','👿','💀','☠','💩','🤡','👹','👺','👻','👽','🤖','😺','😸','😹','😻','😼','😽','🙀','😿','😾']},
+  {cat:'手势',items:['👋','🤚','🖐','✋','🖖','👌','🤏','✌','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍','💅','🤳','💪','🦵','🦶','👂','👃','🧠']},
+  {cat:'动物',items:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦗','🐢','🐍','🦎','🐙','🦑','🦐','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🐘','🦏','🐪','🐫','🦒','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🐐','🦌','🐕','🐩','🐈','🐓','🦃','🕊','🐇','🐁','🐀','🐿','🦔','🐾','🐉','🐲']},
+  {cat:'食物',items:['🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶','🌽','🥕','🧄','🧅','🥔','🍠','🥐','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌭','🍔','🍟','🍕','🥪','🥙','🧆','🌮','🌯','🥗','🥘','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🥛','🍼','☕','🍵','🍶','🍾','🍷','🍸','🍹','🍺','🍻','🥂']},
+  {cat:'交通',items:['🚗','🚕','🚙','🚌','🚎','🏎','🚓','🚑','🚒','🚐','🚚','🚛','🚜','🏍','🛵','🚲','🛴','🛹','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈','🛫','🛬','🛩','💺','🛰','🚀','🛸','🚁','🛶','⛵','🚤','🛥','🛳','⛴','🚢']},
+  {cat:'符号',items:['❤','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣','💕','💞','💓','💗','💖','💘','💝','💟','☮','✝','☪','🕉','☸','✡','🔯','🕎','☯','☦','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛','🉑','☢','☣','📴','📳','🈶','🈚','🈸','🈺','🈷','✴','🆚','💮','🉐','㊙','㊗','🈴','🈵','🈹','🈲','🅰','🅱','🆎','🆑','🅾','🆘']},
+  {cat:'物品',items:['⌚','📱','💻','⌨','🖥','🖨','🖱','🖲','🕹','💽','💾','💿','📀','📼','📷','📸','📹','🎥','📽','🎞','📞','☎','📟','📠','📺','📻','🎙','🎚','🎛','⏱','⏲','⏰','🕰','⌛','📡','🔋','🔌','💡','🔦','🕯','🧯','🗑','🛢','💸','💵','💴','💶','💷','💰','💳','💎','⚖','🔧','🔨','⚒','🛠','⛏','🔩','⚙','⛓','🔫','💣','🔪','🗡','⚔','🛡','🚬','⚰','⚱','🗿']},
+];
+let curCat='全部';
+
+// build categories
+let catRow=document.getElementById('catRow');
+let cats=['全部',...emojiData.map(g=>g.cat)];
+cats.forEach(c=>{
+  let btn=document.createElement('button');
+  btn.className='cat-btn'+(c==='全部'?' active':'');
+  btn.textContent=c;
+  btn.onclick=()=>{curCat=c;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderEmoji()};
+  catRow.appendChild(btn);
+});
+
+function getCodePoint(emoji){
+  let cp=emoji.codePointAt(0);
+  return 'U+'+cp.toString(16).toUpperCase().padStart(4,'0');
+}
+
+function renderEmoji(){
+  let query=document.getElementById('searchInput').value.toLowerCase();
+  let items=[];
+  if(curCat==='全部'){
+    emojiData.forEach(g=>items.push(...g.items));
+  }else{
+    let g=emojiData.find(g=>g.cat===curCat);
+    if(g)items=g.items;
+  }
+  if(query){
+    items=items.filter(e=>{
+      let name=getEmojiName(e);
+      return name.toLowerCase().includes(query);
+    });
+  }
+  let grid=document.getElementById('emojiGrid');
+  grid.innerHTML=items.map(e=>'<div class="emoji-item" onclick="copyEmoji(\''+e+'\')" title="'+getEmojiName(e)+'"><span class="emoji">'+e+'</span><span class="code">'+getCodePoint(e)+'</span></div>').join('');
+}
+
+function getEmojiName(e){
+  let idx=emojiData.findIndex(g=>g.items.includes(e));
+  if(idx>=0)return emojiData[idx].cat;
+  return '';
+}
+
+function copyEmoji(e){
+  navigator.clipboard.writeText(e).then(()=>{
+    document.getElementById('detailBar').textContent='已复制: '+e+' ('+getCodePoint(e)+')';
+    toast('已复制 '+e);
+  });
+}
+function toast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('show'),1500)}
+
+renderEmoji();
+</script>
+</body>
+</html>

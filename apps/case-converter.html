@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大小写/命名风格转换</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.btn-sm{padding:4px 10px;font-size:.75rem}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px}
+.section{display:flex;flex-direction:column;gap:4px}
+.section label{font-size:.82rem;font-weight:600}
+.section textarea{width:100%;padding:10px 14px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.85rem;line-height:1.5;resize:none;background:#fff;color:var(--text);min-height:100px;outline:none}
+.section textarea:focus{border-width:2px}
+.section textarea::placeholder{color:#bbb}
+.result-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.result-item{border:1px solid var(--border);padding:6px 10px;display:flex;align-items:center;justify-content:space-between}
+.result-item .label{font-size:.72rem;color:var(--text-light);min-width:80px;font-weight:600}
+.result-item .value{font-family:var(--font-mono);font-size:.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.result-item .copy-sm{border:1px solid var(--border);background:#fff;color:var(--text);padding:2px 8px;font-size:.68rem;cursor:pointer;font-family:inherit;flex-shrink:0;margin-left:4px}
+.result-item .copy-sm:hover{background:var(--accent);color:#fff}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);font-size:.82rem;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>大小写/命名风格转换</h1></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>大小写/命名风格转换</h3>
+<p>将输入文本转换为多种大小写格式及编程命名风格，实时预览。</p>
+<h3>支持风格</h3>
+<ul><li><strong>小写/大写/首字母大写/单词首字母大写</strong></li><li><strong>camelCase / PascalCase / snake_case / UPPER_SNAKE / kebab-case</strong></li></ul>
+<p>一键复制任意格式结果。</p>
+</div>
+</details>
+<div class="main">
+<div class="section"><label>输入文本（支持多行）</label><textarea id="input" placeholder="输入要转换的文本..." oninput="convertAll()"></textarea></div>
+<div class="result-grid" id="results"></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+function convertAll(){
+  let s=document.getElementById('input').value;
+  if(!s){document.getElementById('results').innerHTML='';return}
+  let lower=s.toLowerCase(),upper=s.toUpperCase();
+  let title=s.replace(/\S+/g,w=>w[0].toUpperCase()+w.slice(1).toLowerCase());
+  let sentence=s.replace(/(^\s*\w|[.!?]\s+\w)/g,c=>c.toUpperCase());
+  let camel=toCamel(s),pascal=toPascal(s),snake=toSnake(s),upperSnake=snake.toUpperCase(),kebab=snake.replace(/_/g,'-');
+  let items=[
+    ['小写',lower],['大写',upper],['首字母大写',sentence],['单词首字母大写',title],
+    ['camelCase',camel],['PascalCase',pascal],['snake_case',snake],['UPPER_SNAKE',upperSnake],['kebab-case',kebab]
+  ];
+  let h='';
+  for(let[l,v]of items)h+='<div class="result-item"><span class="label">'+l+'</span><span class="value" title="'+escapeHTML(v)+'">'+escapeHTML(v)+'</span><button class="copy-sm" onclick="copyText(&quot;'+escapeAttr(v)+'&quot;)">复制</button></div>';
+  document.getElementById('results').innerHTML=h;
+}
+
+function toCamel(s){return s.replace(/[_\-\s]+(.)?/g,(_,c)=>c?c.toUpperCase():'').replace(/^./,c=>c.toLowerCase())}
+function toPascal(s){let c=toCamel(s);return c?c[0].toUpperCase()+c.slice(1):''}
+function toSnake(s){return s.replace(/[A-Z]/g,c=>'_'+c.toLowerCase()).replace(/[\-\s]+/g,'_').replace(/^_/,'').replace(/__+/g,'_')}
+
+function copyText(v){navigator.clipboard.writeText(v).then(()=>toast('已复制'))}
+function escapeHTML(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escapeAttr(s){return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function toast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('show'),1500)}
+</script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unicode字符查询</title>
+<style>
+:root { --bg:#fff; --panel-bg:#fafafa; --text:#111; --text-light:#555; --border:#000; --accent:#000; --font-mono:"Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace; --font-sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--panel-bg);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar h1{font-size:1rem;font-weight:600}
+.btn{padding:6px 16px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:.82rem;cursor:pointer;font-family:inherit;transition:all .1s}
+.btn:hover{background:var(--accent);color:#fff}
+.btn-sm{padding:4px 10px;font-size:.75rem}
+.help-panel{margin:0;border-bottom:1px solid var(--border);background:#fff;flex-shrink:0}
+.help-panel summary{padding:8px 20px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-light);user-select:none}
+.help-panel summary:hover{color:var(--text)}
+.help-content{padding:0 20px 14px;font-size:.78rem;color:var(--text-light);line-height:1.7}
+.help-content h3{font-size:.85rem;color:var(--text);margin:8px 0 4px}
+.help-content ul{padding-left:18px;margin:2px 0 6px}
+.help-content kbd{padding:1px 6px;border:1px solid var(--border);font-family:var(--font-mono);font-size:.72rem;background:#f5f5f5}
+.main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.tab-row{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{padding:8px 18px;border:none;background:#fff;font-size:.85rem;cursor:pointer;color:var(--text-light);border-bottom:2px solid transparent;font-family:inherit;transition:all .1s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);font-weight:600;border-bottom-color:var(--border)}
+.input-row{display:flex;gap:0;border:1px solid var(--border)}
+.input-row input{flex:1;padding:10px 14px;border:none;background:#fff;font-family:var(--font-mono);font-size:.9rem;color:var(--text);outline:none}
+.input-row input:focus{box-shadow:inset 0 0 0 2px var(--border)}
+.input-row input::placeholder{color:#bbb}
+.char-preview{text-align:center;font-size:4rem;padding:16px;border:1px solid var(--border);min-height:100px;display:flex;align-items:center;justify-content:center;font-family:var(--font-sans)}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.result-item{border:1px solid var(--border);padding:8px 12px}
+.result-item .key{font-size:.72rem;color:var(--text-light);margin-bottom:2px}
+.result-item .val{font-family:var(--font-mono);font-size:.9rem;word-break:break-all}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);font-size:.82rem;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="titlebar"><h1>Unicode字符查询</h1></div>
+<details class="help-panel" open>
+<summary>使用说明</summary>
+<div class="help-content">
+<h3>Unicode字符查询</h3>
+<p>双向查询：输入字符查看Unicode码点/编码细节，或输入码点（U+XXXX / 0xXXXX / 十进制）查看对应字符。</p>
+<ul><li><strong>字符 → 码点</strong>：输入任意字符，显示码点、UTF-8/UTF-16编码字节、字符名称</li><li><strong>码点 → 字符</strong>：输入 U+4E2D 或 0x4E2D 或 20013，显示对应字符</li></ul>
+</div>
+</details>
+<div class="main">
+<div class="tab-row">
+<button class="tab active" onclick="switchTab('char',this)">字符 → 码点</button>
+<button class="tab" onclick="switchTab('code',this)">码点 → 字符</button>
+</div>
+<div id="panelChar">
+<div class="input-row"><input id="charInput" placeholder="输入字符，如：中、A、😀、α..." oninput="charToCode()" maxlength="2"></div>
+<div class="char-preview" id="charPreview"></div>
+<div class="result-grid" id="charResult"></div>
+</div>
+<div id="panelCode" style="display:none">
+<div class="input-row"><input id="codeInput" placeholder="输入码点，如：U+4E2D、0x4E2D、20013..." oninput="codeToChar()"></div>
+<div class="char-preview" id="codePreview"></div>
+<div class="result-grid" id="codeResult"></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+let curTab='char';
+const charNames={'0020':'SPACE','0021':'EXCLAMATION MARK','0022':'QUOTATION MARK','0023':'NUMBER SIGN','0024':'DOLLAR SIGN','0025':'PERCENT SIGN','0026':'AMPERSAND','0027':'APOSTROPHE','0028':'LEFT PARENTHESIS','0029':'RIGHT PARENTHESIS','002A':'ASTERISK','002B':'PLUS SIGN','002C':'COMMA','002D':'HYPHEN-MINUS','002E':'FULL STOP','002F':'SOLIDUS','0030':'DIGIT ZERO','0031':'DIGIT ONE','0032':'DIGIT TWO','0033':'DIGIT THREE','0034':'DIGIT FOUR','0035':'DIGIT FIVE','0036':'DIGIT SIX','0037':'DIGIT SEVEN','0038':'DIGIT EIGHT','0039':'DIGIT NINE','003A':'COLON','003B':'SEMICOLON','003C':'LESS-THAN SIGN','003D':'EQUALS SIGN','003E':'GREATER-THAN SIGN','003F':'QUESTION MARK','0040':'COMMERCIAL AT','0041':'LATIN CAPITAL LETTER A','005B':'LEFT SQUARE BRACKET','005C':'REVERSE SOLIDUS','005D':'RIGHT SQUARE BRACKET','005E':'CIRCUMFLEX ACCENT','005F':'LOW LINE','0060':'GRAVE ACCENT','007B':'LEFT CURLY BRACKET','007C':'VERTICAL LINE','007D':'RIGHT CURLY BRACKET','007E':'TILDE','4E00':'CJK UNIFIED IDEOGRAPH-4E00','4E2D':'CJK UNIFIED IDEOGRAPH-4E2D','56FD':'CJK UNIFIED IDEOGRAPH-56FD','6587':'CJK UNIFIED IDEOGRAPH-6587','5B57':'CJK UNIFIED IDEOGRAPH-5B57','4EBA':'CJK UNIFIED IDEOGRAPH-4EBA','5927':'CJK UNIFIED IDEOGRAPH-5927','5C0F':'CJK UNIFIED IDEOGRAPH-5C0F','65E5':'CJK UNIFIED IDEOGRAPH-65E5','6708':'CJK UNIFIED IDEOGRAPH-6708','6C34':'CJK UNIFIED IDEOGRAPH-6C34','706B':'CJK UNIFIED IDEOGRAPH-706B','6728':'CJK UNIFIED IDEOGRAPH-6728','91D1':'CJK UNIFIED IDEOGRAPH-91D1','571F':'CJK UNIFIED IDEOGRAPH-571F','2600':'BLACK SUN WITH RAYS','2601':'CLOUD','2602':'UMBRELLA','2603':'SNOWMAN','260E':'BLACK TELEPHONE','2615':'HOT BEVERAGE','263A':'WHITE SMILING FACE','263B':'BLACK SMILING FACE','2764':'HEAVY BLACK HEART','00B0':'DEGREE SIGN','00B1':'PLUS-MINUS SIGN','00D7':'MULTIPLICATION SIGN','00F7':'DIVISION SIGN','03B1':'GREEK SMALL LETTER ALPHA','03B2':'GREEK SMALL LETTER BETA','03C0':'GREEK SMALL LETTER PI','03A3':'GREEK CAPITAL LETTER SIGMA','2211':'N-ARY SUMMATION','221A':'SQUARE ROOT','221E':'INFINITY','222B':'INTEGRAL','2260':'NOT EQUAL TO','2264':'LESS-THAN OR EQUAL TO','2265':'GREATER-THAN OR EQUAL TO','03A9':'GREEK CAPITAL LETTER OMEGA','2126':'OHM SIGN','00B5':'MICRO SIGN'};
+
+function getCharName(cp){
+  let hex=cp.toString(16).toUpperCase().padStart(4,'0');
+  if(charNames[hex])return charNames[hex];
+  try{return 'Unknown'}catch(e){return 'Unknown'}
+}
+
+function charToCode(){
+  let inp=document.getElementById('charInput').value;
+  if(!inp){document.getElementById('charPreview').textContent='';document.getElementById('charResult').innerHTML='';return}
+  let c=inp[0],cp=c.codePointAt(0);
+  document.getElementById('charPreview').textContent=c;
+  let hex=cp.toString(16).toUpperCase();
+  document.getElementById('charResult').innerHTML=
+    '<div class="result-item"><div class="key">Unicode码点</div><div class="val">U+'+hex.padStart(4,'0')+'</div></div>'+
+    '<div class="result-item"><div class="key">十进制</div><div class="val">'+cp+'</div></div>'+
+    '<div class="result-item"><div class="key">字符名称</div><div class="val">'+getCharName(cp)+'</div></div>'+
+    '<div class="result-item"><div class="key">HTML实体 (十进制)</div><div class="val">&amp;#'+cp+';</div></div>'+
+    '<div class="result-item"><div class="key">HTML实体 (十六进制)</div><div class="val">&amp;#x'+hex+';</div></div>'+
+    '<div class="result-item"><div class="key">JavaScript</div><div class="val">\\u{'+hex+'}</div></div>'+
+    '<div class="result-item"><div class="key">UTF-8 编码</div><div class="val">'+encodeURIComponent(c).split('%').filter(Boolean).map(b=>'0x'+b).join(' ').toUpperCase()+'</div></div>'+
+    '<div class="result-item"><div class="key">UTF-16 编码</div><div class="val">'+utf16Hex(c)+'</div></div>';
+}
+
+function utf16Hex(c){
+  let cp=c.codePointAt(0);
+  if(cp<=0xFFFF)return '0x'+cp.toString(16).toUpperCase().padStart(4,'0');
+  cp-=0x10000;
+  let hi=0xD800|(cp>>10),lo=0xDC00|(cp&0x3FF);
+  return '0x'+hi.toString(16).toUpperCase()+' 0x'+lo.toString(16).toUpperCase();
+}
+
+function codeToChar(){
+  let raw=document.getElementById('codeInput').value.trim();
+  if(!raw){document.getElementById('codePreview').textContent='';document.getElementById('codeResult').innerHTML='';return}
+  let cp=null;
+  if(/^U\+[0-9a-fA-F]+$/.test(raw))cp=parseInt(raw.slice(2),16);
+  else if(/^0x[0-9a-fA-F]+$/.test(raw))cp=parseInt(raw,16);
+  else if(/^\d+$/.test(raw))cp=parseInt(raw,10);
+  if(cp===null||cp>0x10FFFF){document.getElementById('codePreview').textContent='无效码点';document.getElementById('codeResult').innerHTML='';return}
+  let c=String.fromCodePoint(cp);
+  document.getElementById('codePreview').textContent=c;
+  let hex=cp.toString(16).toUpperCase();
+  document.getElementById('codeResult').innerHTML=
+    '<div class="result-item"><div class="key">字符</div><div class="val" style="font-size:1.4rem">'+c+'</div></div>'+
+    '<div class="result-item"><div class="key">Unicode码点</div><div class="val">U+'+hex.padStart(4,'0')+'</div></div>'+
+    '<div class="result-item"><div class="key">十进制</div><div class="val">'+cp+'</div></div>'+
+    '<div class="result-item"><div class="key">字符名称</div><div class="val">'+getCharName(cp)+'</div></div>';
+}
+
+function switchTab(t,btn){curTab=t;document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('panelChar').style.display=t==='char'?'block':'none';document.getElementById('panelCode').style.display=t==='code'?'block':'none'}
+function toast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('show'),1500)}
+</script>
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>表格生成器</title>
+<style>
+/* ============================================================
+   白色极简主题 — 纯白底 + 黑字 + 黑边框
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --panel-bg: #fafafa;
+  --text: #111111;
+  --text-light: #555555;
+  --border: #000000;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --success: #111111;
+  --danger: #cc0000;
+  --radius: 0px;
+  --font-mono: "Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace;
+  --font-sans: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans); background: var(--bg); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; background: var(--panel-bg);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.titlebar h1 { font-size: 1rem; font-weight: 600; }
+.titlebar-controls { display: flex; gap: 8px; }
+.btn {
+  padding: 6px 16px; border: 1px solid var(--border);
+  background: #fff; color: var(--text); font-size: 0.82rem;
+  cursor: pointer; font-family: inherit; transition: all 0.1s;
+}
+.btn:hover { background: var(--accent); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+.help-panel {
+  margin: 0; border-bottom: 1px solid var(--border);
+  background: #fff; flex-shrink: 0;
+}
+.help-panel summary {
+  padding: 8px 20px; cursor: pointer; font-size: 0.78rem;
+  font-weight: 600; color: var(--text-light); user-select: none;
+}
+.help-panel summary:hover { color: var(--text); }
+.help-content {
+  padding: 0 20px 14px; font-size: 0.78rem; color: var(--text-light);
+  line-height: 1.7;
+}
+.help-content h3 { font-size: 0.85rem; color: var(--text); margin: 8px 0 4px; }
+.help-content ul { padding-left: 18px; margin: 2px 0 6px; }
+.help-content kbd {
+  padding: 1px 6px; border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 0.72rem; background: #f5f5f5;
+}
+.main {
+  flex: 1; overflow: hidden; display: flex; flex-direction: column;
+  padding: 16px; gap: 10px;
+}
+/* 控制栏 */
+.control-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--border); flex-shrink: 0;
+}
+.control-group { display: flex; align-items: center; gap: 4px; }
+.control-group label { font-size: 0.82rem; font-weight: 600; }
+.control-group input[type=number] {
+  width: 56px; padding: 4px 6px; border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 0.82rem; text-align: center;
+  background: #fff; color: var(--text);
+}
+.control-group input[type=number]:focus { outline: none; border-width: 2px; }
+.control-group select {
+  padding: 4px 8px; border: 1px solid var(--border);
+  font-size: 0.82rem; background: #fff; color: var(--text);
+}
+.sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+/* 表格编辑区 */
+.table-wrapper {
+  flex: 1; overflow: auto; border: 1px solid var(--border);
+  background: #fff; min-height: 0;
+}
+.edit-table {
+  border-collapse: collapse; width: max-content; min-width: 100%;
+}
+.edit-table th, .edit-table td {
+  border: 1px solid #ddd; padding: 0; min-width: 80px;
+  position: relative;
+}
+.edit-table th { background: var(--panel-bg); }
+.edit-table th input, .edit-table td input {
+  width: 100%; padding: 6px 8px; border: none; background: transparent;
+  font-size: 0.85rem; color: var(--text); outline: none;
+  font-family: inherit;
+}
+.edit-table th input:focus, .edit-table td input:focus {
+  background: #fff; outline: 2px solid var(--border); outline-offset: -2px;
+}
+.edit-table th input { font-weight: 600; }
+/* 对齐指示 */
+.edit-table .align-left input { text-align: left; }
+.edit-table .align-center input { text-align: center; }
+.edit-table .align-right input { text-align: right; }
+/* 预览区 */
+.preview-section {
+  flex-shrink: 0; border: 1px solid var(--border); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.preview-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+.preview-tab {
+  padding: 6px 14px; border: none; background: transparent;
+  font-size: 0.78rem; cursor: pointer; color: var(--text-light);
+  border-bottom: 2px solid transparent; transition: all 0.1s;
+  font-family: inherit;
+}
+.preview-tab:hover { color: var(--text); }
+.preview-tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--border); }
+.preview-content {
+  padding: 10px 14px; background: var(--panel-bg);
+  font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 180px; overflow-y: auto; color: var(--text);
+}
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  padding: 8px 20px; background: var(--panel-bg); border: 1px solid var(--border);
+  font-size: 0.82rem; z-index: 999; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <h1>表格生成器</h1>
+  <div class="titlebar-controls">
+    <button class="btn btn-sm" onclick="updateTable()">刷新表格</button>
+    <button class="btn btn-sm" onclick="copyPreview()">复制预览内容</button>
+  </div>
+</div>
+
+<details class="help-panel" open>
+  <summary>使用说明</summary>
+  <div class="help-content">
+    <h3>表格生成器</h3>
+    <p>可视化表格编辑器，直接在单元格中输入内容，一键导出 Markdown 或 HTML 格式。</p>
+    <h3>主要功能</h3>
+    <ul>
+      <li>设置行列数，表头自动加粗居中</li>
+      <li>单元格直接点击编辑，实时更新预览</li>
+      <li>支持表头行和所有单元格的对齐方式设置（左/中/右）</li>
+      <li>导出 Markdown 表格和 HTML 表格两种格式</li>
+    </ul>
+    <h3>步骤</h3>
+    <ul>
+      <li>设置行列 → 双击单元格编辑 → 选择对齐方式 → 点击导出</li>
+      <li>可添加/删除行来调整表格大小</li>
+    </ul>
+    <h3>快捷键</h3>
+    <ul>
+      <li><kbd>Tab</kbd> 在单元格间移动</li>
+      <li><kbd>Ctrl+M</kbd> 复制 Markdown</li>
+      <li><kbd>Ctrl+H</kbd> 复制 HTML</li>
+    </ul>
+  </div>
+</details>
+
+<div class="main">
+  <div class="control-bar">
+    <div class="control-group">
+      <label>行</label>
+      <input type="number" id="rowCount" value="4" min="1" max="30" onchange="updateTable()">
+    </div>
+    <div class="control-group">
+      <label>列</label>
+      <input type="number" id="colCount" value="3" min="1" max="15" onchange="updateTable()">
+    </div>
+    <div class="sep"></div>
+    <div class="control-group">
+      <label>表头对齐</label>
+      <select id="headerAlign" onchange="applyAlignment()">
+        <option value="left">左对齐</option>
+        <option value="center" selected>居中</option>
+        <option value="right">右对齐</option>
+      </select>
+    </div>
+    <div class="sep"></div>
+    <button class="btn btn-sm" onclick="addRow()">+ 行</button>
+    <button class="btn btn-sm" onclick="removeRow()">- 行</button>
+    <button class="btn btn-sm" onclick="clearTable()">清空内容</button>
+    <div class="sep"></div>
+    <button class="btn btn-sm" onclick="exportMD()">导出 Markdown</button>
+    <button class="btn btn-sm" onclick="exportHTML()">导出 HTML</button>
+  </div>
+
+  <!-- 表格编辑区 -->
+  <div class="table-wrapper">
+    <table class="edit-table" id="editTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- 预览区 -->
+  <div class="preview-section">
+    <div class="preview-tabs">
+      <button class="preview-tab active" onclick="switchPreview('md',this)">Markdown 预览</button>
+      <button class="preview-tab" onclick="switchPreview('html',this)">HTML 预览</button>
+    </div>
+    <div class="preview-content" id="previewContent"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let previewMode="md";
+
+function updateTable(){
+  const rows=parseInt(document.getElementById("rowCount").value)||4;
+  const cols=parseInt(document.getElementById("colCount").value)||3;
+  const hAlign=document.getElementById("headerAlign").value;
+
+  // 保存现有数据
+  const data=getTableData();
+  saveCurrentData();
+
+  const thead=document.getElementById("tableHead");
+  const tbody=document.getElementById("tableBody");
+
+  // Header
+  let hHTML='<tr>';
+  for(let c=0;c<cols;c++){
+    const val=data[0]&&data[0][c]!==undefined?data[0][c]:(c===0?"列 "+(c+1):"");
+    hHTML+=`<th class="align-${hAlign}"><input type="text" value="${escapeAttr(val)}" placeholder="表头${c+1}" oninput="refreshPreview()"></th>`;
+  }
+  hHTML+='</tr>';
+  thead.innerHTML=hHTML;
+
+  // Body
+  let bHTML='';
+  for(let r=1;r<rows;r++){
+    bHTML+='<tr>';
+    for(let c=0;c<cols;c++){
+      const val=data[r]&&data[r][c]!==undefined?data[r][c]:"";
+      bHTML+=`<td><input type="text" value="${escapeAttr(val)}" placeholder="..." oninput="refreshPreview()"></td>`;
+    }
+    bHTML+='</tr>';
+  }
+  tbody.innerHTML=bHTML;
+
+  refreshPreview();
+}
+
+function saveCurrentData(){
+  // Data is read dynamically, no need to save
+}
+
+function getTableData(){
+  const data=[];
+  const thead=document.getElementById("tableHead");
+  const tbody=document.getElementById("tableBody");
+  if(thead.querySelector("tr")){
+    const row=[];
+    thead.querySelectorAll("input").forEach(inp=>row.push(inp.value));
+    data.push(row);
+  }
+  tbody.querySelectorAll("tr").forEach(tr=>{
+    const row=[];
+    tr.querySelectorAll("input").forEach(inp=>row.push(inp.value));
+    data.push(row);
+  });
+  return data;
+}
+
+function applyAlignment(){
+  const align=document.getElementById("headerAlign").value;
+  document.querySelectorAll("#tableHead th").forEach(th=>{
+    th.className="align-"+align;
+  });
+  refreshPreview();
+}
+
+function addRow(){
+  const cols=parseInt(document.getElementById("colCount").value)||3;
+  const tbody=document.getElementById("tableBody");
+  let html='<tr>';
+  for(let c=0;c<cols;c++) html+=`<td><input type="text" value="" placeholder="..." oninput="refreshPreview()"></td>`;
+  html+='</tr>';
+  tbody.insertAdjacentHTML("beforeend",html);
+  document.getElementById("rowCount").value=parseInt(document.getElementById("rowCount").value)+1;
+  refreshPreview();
+}
+
+function removeRow(){
+  const tbody=document.getElementById("tableBody");
+  const rows=tbody.querySelectorAll("tr");
+  if(rows.length===0) return;
+  rows[rows.length-1].remove();
+  document.getElementById("rowCount").value=Math.max(1,parseInt(document.getElementById("rowCount").value)-1);
+  refreshPreview();
+}
+
+function clearTable(){
+  document.querySelectorAll("#editTable input").forEach(inp=>inp.value="");
+  refreshPreview();
+}
+
+function getCurrentData(){
+  const data=[];
+  document.querySelectorAll("#tableHead tr").forEach(tr=>{
+    const row=[];
+    tr.querySelectorAll("input").forEach(inp=>row.push(inp.value));
+    data.push(row);
+  });
+  document.querySelectorAll("#tableBody tr").forEach(tr=>{
+    const row=[];
+    tr.querySelectorAll("input").forEach(inp=>row.push(inp.value));
+    data.push(row);
+  });
+  return data;
+}
+
+function toMarkdown(data){
+  if(data.length===0) return "";
+  const cols=data[0].length;
+  let md="";
+  // Header
+  md+="| "+data[0].map(c=>c||" ").join(" | ")+" |\n";
+  // Separator
+  const hAlign=document.getElementById("headerAlign").value;
+  let sepMap={left:":---",center:":---:",right:"---:"};
+  let sep=sepMap[hAlign]||":---:";
+  md+="| "+Array(cols).fill(sep).join(" | ")+" |\n";
+  // Body
+  for(let r=1;r<data.length;r++){
+    md+="| "+data[r].map(c=>c||" ").join(" | ")+" |\n";
+  }
+  return md;
+}
+
+function toHTML(data){
+  if(data.length===0) return "";
+  const hAlign=document.getElementById("headerAlign").value;
+  let html='<table>\n  <thead>\n    <tr>\n';
+  for(const cell of data[0]){
+    html+=`      <th style="text-align:${hAlign}">${escapeHTML(cell||"&nbsp;")}</th>\n`;
+  }
+  html+='    </tr>\n  </thead>\n  <tbody>\n';
+  for(let r=1;r<data.length;r++){
+    html+='    <tr>\n';
+    for(const cell of data[r]){
+      html+=`      <td>${escapeHTML(cell||"&nbsp;")}</td>\n`;
+    }
+    html+='    </tr>\n';
+  }
+  html+='  </tbody>\n</table>';
+  return html;
+}
+
+function refreshPreview(){
+  const data=getCurrentData();
+  const content=previewMode==="md"?toMarkdown(data):toHTML(data);
+  document.getElementById("previewContent").textContent=content;
+}
+
+function switchPreview(mode,btn){
+  previewMode=mode;
+  document.querySelectorAll(".preview-tab").forEach(t=>t.classList.remove("active"));
+  btn.classList.add("active");
+  refreshPreview();
+}
+
+function copyPreview(){
+  const text=document.getElementById("previewContent").textContent;
+  if(!text) return;
+  navigator.clipboard.writeText(text).then(()=>toastMsg("已复制"+ (previewMode==="md"?"Markdown":"HTML")));
+}
+
+function exportMD(){
+  const data=getCurrentData();
+  const md=toMarkdown(data);
+  const blob=new Blob([md],{type:"text/markdown;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="table.md"; a.click();
+  URL.revokeObjectURL(url);
+  toastMsg("已导出 table.md");
+}
+
+function exportHTML(){
+  const data=getCurrentData();
+  const html=toHTML(data);
+  const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="table.html"; a.click();
+  URL.revokeObjectURL(url);
+  toastMsg("已导出 table.html");
+}
+
+function escapeAttr(s){ return s.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escapeHTML(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function toastMsg(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._tid);
+  t._tid=setTimeout(()=>t.classList.remove("show"),1800);
+}
+
+document.addEventListener("keydown",e=>{
+  if(e.ctrlKey&&e.key==="m"){ e.preventDefault(); previewMode="md"; refreshPreview(); copyPreview(); }
+  if(e.ctrlKey&&e.key==="h"&&!e.ctrlKey){}
+  if(e.ctrlKey&&!e.shiftKey&&e.key==="h"){ e.preventDefault(); previewMode="html"; refreshPreview(); copyPreview(); }
+});
+
+updateTable();
+</script>
+</body>
+</html>

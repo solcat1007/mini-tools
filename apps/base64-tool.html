@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Base64 编解码工具</title>
+<style>
+/* ============================================================
+   白色极简主题 — 纯白底 + 黑字 + 黑边框
+   ============================================================ */
+:root {
+  --bg: #ffffff;
+  --panel-bg: #fafafa;
+  --text: #111111;
+  --text-light: #555555;
+  --border: #000000;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --success: #111111;
+  --danger: #cc0000;
+  --radius: 0px;
+  --font-mono: "Cascadia Code","SF Mono","Fira Code","Consolas","Monaco",monospace;
+  --font-sans: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans); background: var(--bg); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* 使用说明面板 */
+.help-panel {
+  border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-shrink: 0;
+}
+.help-toggle {
+  padding: 10px 16px; font-size:0.82rem; font-weight:600; cursor:pointer;
+  user-select:none; list-style:none; color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.help-toggle::-webkit-details-marker { display:none; }
+.help-toggle::before { content: '▶ '; font-size:0.7rem; display:inline-block; transition:transform 0.15s; }
+details[open] .help-toggle::before { transform: rotate(90deg); }
+.help-content {
+  padding: 12px 16px; font-size:0.78rem; line-height:1.7; color: var(--text);
+  background: #fff; border-bottom: 1px solid var(--border);
+}
+.help-content h3 { font-size:0.9rem; margin-bottom:6px; font-weight:700; }
+.help-content h4 { font-size:0.8rem; margin:8px 0 4px; font-weight:600; }
+.help-content ul { padding-left:18px; margin:4px 0; }
+.help-content li { margin:2px 0; }
+.help-content table { border-collapse:collapse; width:100%; margin:6px 0; font-size:0.75rem; }
+.help-content th, .help-content td { border:1px solid var(--border); padding:4px 8px; text-align:left; }
+.help-content th { background: #f5f5f5; font-weight:600; }
+.help-content code { background:#f0f0f0; padding:1px 4px; font-family:var(--font-mono); font-size:0.72rem; }
+
+/* 标题栏 */
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; height: 44px; background: #fafafa;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  user-select: none;
+}
+.titlebar-title { font-size:0.9rem; font-weight:600; }
+.titlebar-actions { display:flex; gap:6px; }
+
+/* 按钮 */
+.btn {
+  padding: 5px 12px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.82rem; cursor: pointer;
+  font-family: inherit; white-space: nowrap; transition: all 0.1s;
+}
+.btn:hover { background: var(--accent); color:#fff; }
+.btn.primary { background:var(--accent); color:#fff; }
+.btn.primary:hover { background:var(--accent-hover); }
+
+/* 标签页 */
+.tab-row {
+  display: flex; gap: 0; padding: 8px 16px 0; flex-shrink: 0;
+}
+.tab-btn {
+  padding: 8px 18px; border: 1px solid var(--border); border-bottom: none;
+  background: #fafafa; color: var(--text-light);
+  font-size: 0.85rem; cursor: pointer; font-family: inherit;
+  margin-right: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: #fff; color: var(--text); font-weight:600; border-bottom: 2px solid var(--border); }
+
+.main {
+  flex:1; display:flex; overflow:hidden; min-height:0;
+}
+.tab-content { display:none; flex:1; flex-direction:column; overflow:hidden; gap:14px; }
+.tab-content.active { display:flex; }
+
+/* 文本输入框 */
+textarea, input[type="text"], input[type="number"], select {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  font-family: inherit; outline: none;
+}
+textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(original - 1px); }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:50px; left:50%; transform:translateX(-50%);
+  background:var(--accent); color:#fff; padding:10px 24px;
+  font-size:0.85rem; z-index:999;
+  opacity:0; transition:opacity 0.2s; pointer-events:none;
+  border: 1px solid var(--border);
+}
+.toast.show { opacity:1; }
+.toast.success { background:var(--success); }
+.toast.error { background:var(--danger); }
+
+/* Base64 编解码工具专用样式 */
+.tab-content { display:none; flex:1; flex-direction:column; overflow:hidden; }
+.tab-content.active { display:flex; }
+.text-area { flex:1; display:flex; flex-direction:column; gap:10px; padding:16px; }
+#base64Input {
+  flex:1; padding:12px; border:1px solid var(--border);
+  background:#fff; color:var(--text);
+  font-family:var(--font-mono); font-size:0.85rem; line-height:1.6;
+  resize:none; outline:none;
+}
+#base64Input:focus { border-width:2px; }
+#base64Input::placeholder { color:#999; }
+.base64-output {
+  padding:12px; border:1px solid var(--border);
+  background:#fafafa; font-family:var(--font-mono);
+  font-size:0.82rem; min-height:60px; max-height:160px;
+  overflow-y:auto; word-break:break-all; line-height:1.5;
+  color:var(--text);
+}
+.result-hint {
+  color:var(--text-light); font-size:0.75rem;
+  display:flex; align-items:center; gap:4px;
+}
+.image-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.dropzone {
+  margin:16px; min-height:200px; border:2px dashed var(--border);
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; cursor:pointer; background:#fafafa;
+  transition:all 0.2s;
+}
+.dropzone:hover { border-color:var(--accent); background:#f5f5f5; }
+.dropzone .dz-icon { font-size:2rem; margin-bottom:8px; }
+.dropzone .dz-text { color:var(--text-light); font-size:0.85rem; }
+.image-preview-area {
+  flex:1; display:flex; align-items:center; justify-content:center;
+  padding:12px; overflow:auto;
+}
+.image-preview-area img { max-width:100%; max-height:300px; border:1px solid var(--border); }
+.image-base64-output {
+  padding:10px 14px; margin:8px 16px 16px;
+  border:1px solid var(--border); font-family:var(--font-mono);
+  font-size:0.72rem; background:#fafafa; max-height:120px;
+  overflow-y:auto; word-break:break-all; line-height:1.4; color:var(--text);
+}
+
+/* === Auto-fix: shared utility styles === */
+.toolbar {
+  display: flex; align-items: center; gap: 6px; padding: 6px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.toolbar-btn:hover { background: var(--accent); color: #fff; }
+.toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+.toolbar-hint { font-size: 0.7rem; color: var(--text-light); margin-left: auto; }
+.titlebar-btn {
+  padding: 4px 10px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.78rem; cursor: pointer;
+  font-family: inherit; transition: all 0.1s;
+}
+.titlebar-btn:hover { background: var(--accent); color: #fff; }
+.accent { background: var(--accent); color: #fff; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+.stats {
+  display: flex; gap: 16px; padding: 6px 16px; font-size: 0.72rem;
+  color: var(--text-light); flex-shrink: 0; border-top: 1px solid var(--border);
+  background: #fafafa;
+}
+.stat-item { display: flex; align-items: center; gap: 4px; }
+.stat-val { color: var(--text); font-weight: 600; font-family: var(--font-mono); }
+.statusbar {
+  display: flex; align-items: center; gap: 12px; padding: 6px 16px;
+  font-size: 0.72rem; color: var(--text-light);
+  border-top: 1px solid var(--border); background: #fafafa; flex-shrink: 0;
+}
+.status-item { display: flex; align-items: center; gap: 4px; }
+.status-count { color: var(--text); font-weight: 600; }
+.context-menu {
+  position: fixed; background: #fff; border: 1px solid var(--border);
+  padding: 6px 0; z-index: 1000; display: none; min-width: 160px;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+}
+.context-menu.show { display: block; }
+.context-item {
+  padding: 8px 16px; font-size: 0.82rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background 0.1s;
+}
+.context-item:hover { background: #f0f0f0; }
+.context-shortcut { font-size: 0.7rem; color: var(--text-light); }
+.editor-area { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+.result-area { display: flex; flex-direction: column; overflow: hidden; }
+.panel-body { flex: 1; display: flex; overflow: hidden; }
+.divider {
+  width: 4px; cursor: col-resize; background: #f0f0f0;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.divider:hover, .divider.active { background: var(--border); }
+.drop-highlight { border: 2px dashed var(--accent) !important; background: #fafafa !important; }
+.info { padding: 14px; color: var(--text-light); font-size: 0.82rem; }
+.indent-select {
+  padding: 2px 6px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.75rem; font-family: inherit;
+}
+.valid { border-color: #000 !important; }
+.invalid { border-color: var(--danger) !important; }
+.error-msg { color: var(--danger); font-size: var(--font-mono); padding: 4px 0; }
+.no-match { color: var(--text-light); font-size: 0.85rem; }
+/* regex-tester */
+.regex-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  flex-shrink: 0; border-bottom: 1px solid var(--border); background: #fafafa;
+}
+.regex-row input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; }
+.flag-options { display: flex; gap: 4px; }
+.flag-options .btn { padding: 3px 10px; font-size: 0.75rem; }
+.flag-options .btn.active { background: var(--accent); color: #fff; }
+.editor-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.editor-wrap textarea { flex: 1; padding: 12px; border: none; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; outline: none; }
+.presets { display: flex; gap: 4px; padding: 6px 16px; flex-shrink: 0; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.preset-btn { padding: 3px 10px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+.preset-btn:hover { background: var(--accent); color: #fff; }
+.match-text { color: var(--text); font-weight: 600; }
+.match-groups { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-light); }
+/* screenshot-tool */
+.tool-group { display: flex; gap: 2px; }
+.tool-label { font-size: 0.7rem; color: var(--text-light); margin-bottom: 2px; }
+.stroke-select { padding: 2px 4px; border: 1px solid var(--border); font-size: 0.72rem; }
+.selected { background: var(--accent) !important; color: #fff !important; }
+.canvas-container {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #f0f0f0; overflow: hidden; position: relative;
+}
+.canvas-placeholder { color: var(--text-light); font-size: 1.2rem; }
+/* color-picker */
+.color-preview {
+  width: 100%; height: 120px; border: 1px solid var(--border);
+  cursor: pointer; transition: background 0.2s;
+}
+.picker-section { display: flex; flex-direction: column; gap: 10px; }
+.mid-section { display: flex; gap: 10px; }
+.right-section { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.color-row { display: flex; align-items: center; gap: 8px; }
+.color-values { display: flex; flex-direction: column; gap: 4px; }
+.section-title { font-size: 0.72rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; }
+.info-block { font-size: 0.78rem; line-height: 1.6; color: var(--text); }
+.info-block .key { font-weight: 600; }
+.favorites-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.card { background: #fff; border: 1px solid var(--border); padding: 8px; font-size: 0.75rem; }
+.export-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; background: #fafafa; border: 1px solid var(--border); }
+.eyedropper-overlay { position: fixed; inset: 0; z-index: 999; cursor: crosshair; }
+.eyedropper-magnifier { width: 30px; height: 30px; border: 2px solid var(--border); border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+.eyedropper-label { font-size: 0.75rem; color: var(--text-light); }
+/* base64-tool */
+.text-panel { display: flex; flex-direction: column; overflow: hidden; }
+.text-row { display: flex; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+.text-actions { display: flex; gap: 4px; }
+.img-panel { display: flex; flex-direction: column; overflow: hidden; }
+.img-actions { display: flex; gap: 4px; padding: 8px 16px; flex-shrink: 0; }
+.col-header { font-size: 0.78rem; font-weight: 600; padding: 8px 16px; background: #fafafa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.col-body { flex: 1; overflow: hidden; display: flex; }
+.text-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.img-result { max-width: 100%; max-height: 300px; object-fit: contain; }
+.img-dropzone {
+  flex: 1; min-height: 160px; border: 2px dashed var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s; background: #fafafa; margin: 8px;
+}
+.img-dropzone:hover { border-color: var(--accent); background: #f5f5f5; }
+.placeholder { color: var(--text-light); font-size: 0.85rem; }
+/* qrcode-tool */
+.input-section { display: flex; gap: 8px; padding: 12px 16px; flex-shrink: 0; }
+.input-section textarea { flex: 1; padding: 10px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; resize: none; min-height: 60px; }
+.qr-section {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #fafafa; overflow: hidden;
+}
+.qr-placeholder { color: var(--text-light); font-size: 1.1rem; }
+.size-row { display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+/* timer */
+.mode-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.mode-tab {
+  padding: 8px 18px; border: none; border-right: 1px solid var(--border);
+  background: #fafafa; color: var(--text-light); font-size: 0.85rem;
+  cursor: pointer; font-family: inherit;
+}
+.mode-tab:hover { color: var(--text); }
+.mode-tab.active { background: #fff; color: var(--text); font-weight: 600; }
+.controls { display: flex; justify-content: center; gap: 8px; padding: 12px; flex-shrink: 0; }
+.control-btn {
+  padding: 8px 18px; border: 1px solid var(--border); background: #fff;
+  color: var(--text); font-size: 0.85rem; cursor: pointer; font-family: inherit;
+}
+.control-btn:hover { background: var(--accent); color: #fff; }
+.control-btn.start { background: var(--accent); color: #fff; }
+.control-btn.pause { background: #f5f5f5; }
+.control-btn.reset { color: var(--danger); }
+.settings-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; flex-shrink: 0; }
+.time-input-row { display: flex; align-items: center; gap: 8px; }
+.time-input-row input { width: 60px; padding: 4px 8px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; text-align: center; }
+.progress-bar { height: 4px; background: #f0f0f0; flex-shrink: 0; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.pomodoro-section { display: flex; flex-direction: column; gap: 8px; padding: 8px 16px; }
+.phase-list { display: flex; flex-direction: column; gap: 4px; }
+.phase-name { font-size: 0.8rem; color: var(--text); font-weight: 500; }
+.phase-time { font-size: 0.72rem; color: var(--text-light); font-family: var(--font-mono); }
+.phase-status { font-size: 0.7rem; }
+.phase-icon { margin-right: 4px; }
+.add-phase-form { display: flex; gap: 6px; align-items: center; padding: 8px 0; }
+.add-phase-form input { padding: 4px 8px; border: 1px solid var(--border); font-size: 0.78rem; width: 100px; }
+.shortcut-hint { font-size: 0.65rem; color: var(--text-light); text-align: center; padding: 4px; }
+/* json formatter result types */
+.success { color: var(--text); }
+.error { color: var(--danger); }
+/* base64 image dropzone text cols */
+.img-dropzone .dz-icon { font-size: 2.5rem; }
+.img-dropzone .dz-text { color: var(--text-light); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<details class="help-panel" open>
+  <summary class="help-toggle">使用说明</summary>
+  <div class="help-content">
+### Base64 编解码工具
+Base64 编解码工具，支持文本和图片双模式。
+
+**主要功能**
+- 文本编码：普通文本 → Base64 编码
+- 文本解码：Base64 → 普通文本（自动处理 UTF-8）
+- 图片编码：拖拽/点击上传图片，自动生成 Base64 字符串
+- 图片解码：粘贴 Base64 后还原图片预览
+- 下载图片：将 Base64 编码的图片下载为 PNG
+
+**注意事项**
+- Base64 编码会使数据膨胀约 33%
+- 大图片编码可能耗时，建议小于 5MB
+  </div>
+</details>
+
+<div class="titlebar">
+  <span class="titlebar-title">🔐 Base64 编解码工具</span>
+  <div class="titlebar-actions">
+    <button class="btn" onclick="copyOutput()">📋 复制结果</button>
+    <button class="btn" onclick="clearAll()">🗑 清空</button>
+  </div>
+</div>
+
+<div class="tab-row">
+  <button class="tab-btn active" onclick="switchTab('text')">📝 文本 ↔ Base64</button>
+  <button class="tab-btn" onclick="switchTab('image')">🖼 图片 ↔ Base64</button>
+</div>
+
+<div class="main">
+  <!-- 文本编解码 Tab -->
+  <div class="tab-content active" id="tabText">
+    <div class="text-panel">
+      <div class="text-row">
+        <div class="text-col">
+          <div class="col-header"><span>📄 普通文本</span><span id="textCharCount">0 字符</span></div>
+          <div class="col-body">
+            <textarea id="plainText" placeholder="在此输入普通文本...&#10;点击「编码 →」生成 Base64，或点击「← 解码」还原 Base64"></textarea>
+          </div>
+        </div>
+        <div class="text-col">
+          <div class="col-header"><span>🔐 Base64</span><span id="base64CharCount">0 字符</span></div>
+          <div class="col-body">
+            <textarea id="base64Text" placeholder="在此粘贴 Base64 编码文本..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="text-actions">
+        <button class="btn primary" onclick="encodeText()">编码 →</button>
+        <button class="btn primary" onclick="decodeText()">← 解码</button>
+        <span class="toolbar-sep"></span>
+        <button class="btn" onclick="swapText()">⇄ 交换</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片编解码 Tab -->
+  <div class="tab-content" id="tabImage">
+    <div class="img-panel">
+      <div class="img-dropzone" id="imgDropzone" onclick="document.getElementById('imgFileInput').click()"
+           ondragover="handleImgDragOver(event)" ondragleave="handleImgDragLeave(event)" ondrop="handleImgDrop(event)">
+        <span class="placeholder" id="imgPlaceholder">📁 点击或拖拽图片到此区域<br><small style="color:#5a5a6e">支持 JPG / PNG / WebP / GIF</small></span>
+        <img id="imgPreview" style="display:none">
+      </div>
+      <div class="img-result">
+        <textarea id="imgBase64Output" placeholder="图片的 Base64 编码将在此显示...&#10;也可粘贴 Base64 并点击「还原图片」预览"></textarea>
+      </div>
+    </div>
+    <div class="img-actions">
+      <button class="btn primary" onclick="decodeImageToPreview()" title="将 Base64 还原为图片预览">🖼 还原图片</button>
+      <button class="btn" onclick="copyImageBase64()">📋 复制 Base64</button>
+      <button class="btn" onclick="downloadImage()">💾 下载图片</button>
+    </div>
+  </div>
+</div>
+
+<div class="stats">
+  <span class="stat-item">编码长度：<span class="stat-val" id="statEncodedLen">0</span></span>
+  <span class="stat-item">原始大小：<span class="stat-val" id="statOriginalSize">0 B</span></span>
+  <span class="stat-item">膨胀率：<span class="stat-val" id="statRatio">-</span></span>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="imgFileInput" accept="image/*" style="display:none">
+
+<script>
+(function() {
+  'use strict';
+
+  const plainText     = document.getElementById('plainText');
+  const base64Text    = document.getElementById('base64Text');
+  const imgDropzone   = document.getElementById('imgDropzone');
+  const imgPlaceholder = document.getElementById('imgPlaceholder');
+  const imgPreview     = document.getElementById('imgPreview');
+  const imgBase64Output = document.getElementById('imgBase64Output');
+  const imgFileInput   = document.getElementById('imgFileInput');
+  const toastEl        = document.getElementById('toast');
+  const statEncodedLen = document.getElementById('statEncodedLen');
+  const statOriginalSize = document.getElementById('statOriginalSize');
+  const statRatio      = document.getElementById('statRatio');
+
+  let currentTab = 'text';
+  let toastTimer = null;
+  let currentImgBase64 = '';
+  let currentImgMime = '';
+
+  function showToast(msg, type) {
+    if (toastTimer) clearTimeout(toastTimer);
+    toastEl.textContent = msg;
+    toastEl.className = 'toast ' + (type || '') + ' show';
+    toastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 2000);
+  }
+
+  function updateStats(plainLen, encodedLen) {
+    statEncodedLen.textContent = encodedLen;
+    statOriginalSize.textContent = formatBytes(plainLen);
+    if (plainLen > 0) {
+      statRatio.textContent = ((encodedLen / plainLen * 100) - 100).toFixed(1) + '%';
+    } else {
+      statRatio.textContent = '-';
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  /**
+   * 文本 → Base64 编码
+   */
+  window.encodeText = function() {
+    var text = plainText.value;
+    if (!text) { showToast('请输入文本', 'error'); return; }
+    try {
+      /** UTF-8 safe base64 encoding using TextEncoder */
+    function utf8ToBase64(str) {
+      var bytes = new TextEncoder().encode(str);
+      var binStr = Array.from(bytes, function(b) { return String.fromCharCode(b); }).join('');
+      return btoa(binStr);
+    }
+    var encoded = utf8ToBase64(text);
+      base64Text.value = encoded;
+      updateStats(new Blob([text]).size, encoded.length);
+      document.getElementById('textCharCount').textContent = text.length + ' 字符';
+      document.getElementById('base64CharCount').textContent = encoded.length + ' 字符';
+      showToast('编码完成', 'success');
+    } catch(e) {
+      showToast('编码失败：' + e.message, 'error');
+    }
+  };
+
+  /**
+   * Base64 → 文本解码
+   */
+  window.decodeText = function() {
+    var b64 = base64Text.value.trim();
+    if (!b64) { showToast('请输入 Base64 文本', 'error'); return; }
+    try {
+      /** UTF-8 safe base64 decoding using TextDecoder */
+    function base64ToUtf8(b64) {
+      var binStr = atob(b64);
+      var bytes = Uint8Array.from(binStr, function(c) { return c.charCodeAt(0); });
+      return new TextDecoder().decode(bytes);
+    }
+    var decoded = base64ToUtf8(b64);
+      // 检查是否为有效 UTF-8
+      plainText.value = decoded;
+      updateStats(new Blob([decoded]).size, b64.length);
+      document.getElementById('textCharCount').textContent = decoded.length + ' 字符';
+      document.getElementById('base64CharCount').textContent = b64.length + ' 字符';
+      showToast('解码完成', 'success');
+    } catch(e) {
+      showToast('解码失败：无效的 Base64 或非文本内容', 'error');
+    }
+  };
+
+  /**
+   * 交换两侧文本
+   */
+  window.swapText = function() {
+    var tmp = plainText.value;
+    plainText.value = base64Text.value;
+    base64Text.value = tmp;
+    updateStats(new Blob([plainText.value]).size, base64Text.value.length);
+    document.getElementById('textCharCount').textContent = plainText.value.length + ' 字符';
+    document.getElementById('base64CharCount').textContent = base64Text.value.length + ' 字符';
+  };
+
+  // ========== 图片处理 ==========
+
+  imgFileInput.addEventListener('change', function() {
+    var file = imgFileInput.files[0];
+    if (!file) return;
+    processImageFile(file);
+    imgFileInput.value = '';
+  });
+
+  function processImageFile(file) {
+    if (!file.type.match(/^image\//)) {
+      showToast('请选择图片文件', 'error');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      showToast('图片过大（超过 20MB）', 'error');
+      return;
+    }
+    currentImgMime = file.type;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var base64 = e.target.result;
+      // 去掉 data:...;base64, 前缀
+      var idx = base64.indexOf('base64,');
+      currentImgBase64 = idx !== -1 ? base64.substring(idx + 7) : base64;
+      imgBase64Output.value = base64;
+      // 预览图片
+      imgPreview.src = base64;
+      imgPreview.style.display = 'block';
+      imgPlaceholder.style.display = 'none';
+      updateStats(file.size, currentImgBase64.length);
+      showToast('已加载图片（' + formatBytes(file.size) + '）', 'success');
+    };
+    reader.onerror = function() { showToast('文件读取失败', 'error'); };
+    reader.readAsDataURL(file);
+  }
+
+  function handleImgDragOver(e) { e.preventDefault(); imgDropzone.classList.add('drop-highlight'); }
+  function handleImgDragLeave(e) { e.preventDefault(); imgDropzone.classList.remove('drop-highlight'); }
+  function handleImgDrop(e) {
+    e.preventDefault();
+    imgDropzone.classList.remove('drop-highlight');
+    var files = e.dataTransfer.files;
+    if (files.length > 0) processImageFile(files[0]);
+  }
+
+  window.handleImgDragOver = handleImgDragOver;
+  window.handleImgDragLeave = handleImgDragLeave;
+  window.handleImgDrop = handleImgDrop;
+
+  /**
+   * 将 Base64 还原为图片预览
+   */
+  window.decodeImageToPreview = function() {
+    var b64 = imgBase64Output.value.trim();
+    if (!b64) { showToast('请先粘贴或生成 Base64', 'error'); return; }
+    // 去掉 data:...;base64, 前缀
+    var idx = b64.indexOf('base64,');
+    var raw = idx !== -1 ? b64.substring(idx + 7) : b64;
+    var mime = 'image/png';
+    if (idx !== -1) {
+      var header = b64.substring(0, idx + 7);
+      var mm = header.match(/data:(image\/[^;]+)/);
+      if (mm) mime = mm[1];
+    }
+    var dataUri = 'data:' + mime + ';base64,' + raw;
+    currentImgBase64 = raw;
+    currentImgMime = mime;
+    imgPreview.src = dataUri;
+    imgPreview.style.display = 'block';
+    imgPlaceholder.style.display = 'none';
+    updateStats(Math.round(raw.length * 0.75), raw.length);
+    showToast('已还原图片预览', 'success');
+  };
+
+  /**
+   * 复制图片 Base64
+   */
+  window.copyImageBase64 = function() {
+    var text = imgBase64Output.value || currentImgBase64;
+    if (!text) { showToast('没有可复制的内容', 'error'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        showToast('已复制 Base64（' + text.length + ' 字符）', 'success');
+      }).catch(function() { showToast('复制失败', 'error'); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); showToast('已复制', 'success'); }
+      catch(e) { showToast('复制失败', 'error'); }
+      document.body.removeChild(ta);
+    }
+  };
+
+  /**
+   * 下载图片
+   */
+  window.downloadImage = function() {
+    if (!currentImgBase64) { showToast('没有可下载的图片', 'error'); return; }
+    var ext = currentImgMime.split('/')[1] || 'png';
+    var dataUri = 'data:' + currentImgMime + ';base64,' + currentImgBase64;
+    var a = document.createElement('a');
+    a.href = dataUri;
+    a.download = 'image.' + ext;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('下载完成', 'success');
+  };
+
+  /**
+   * 复制结果（根据当前 tab）
+   */
+  window.copyOutput = function() {
+    if (currentTab === 'text') {
+      var text = base64Text.value;
+      if (!text) { showToast('没有可复制的内容', 'error'); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          showToast('已复制', 'success');
+        });
+      }
+    } else {
+      copyImageBase64();
+    }
+  };
+
+  /**
+   * 清空
+   */
+  window.clearAll = function() {
+    plainText.value = '';
+    base64Text.value = '';
+    imgBase64Output.value = '';
+    imgPreview.style.display = 'none';
+    imgPlaceholder.style.display = '';
+    currentImgBase64 = '';
+    currentImgMime = '';
+    updateStats(0, 0);
+    document.getElementById('textCharCount').textContent = '0 字符';
+    document.getElementById('base64CharCount').textContent = '0 字符';
+  };
+
+  /**
+   * 切换 Tab
+   */
+  window.switchTab = function(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+    if (tab === 'text') {
+      document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+      document.getElementById('tabText').classList.add('active');
+    } else {
+      document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+      document.getElementById('tabImage').classList.add('active');
+    }
+  };
+
+  // 文本区实时统计
+  plainText.addEventListener('input', function() {
+    document.getElementById('textCharCount').textContent = plainText.value.length + ' 字符';
+  });
+  base64Text.addEventListener('input', function() {
+    document.getElementById('base64CharCount').textContent = base64Text.value.length + ' 字符';
+  });
+
+})();
+</script>
+</body>
+</html>
