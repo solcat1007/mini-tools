@@ -61,9 +61,6 @@ mini-tools/
   apps/
     README.md         # 详细开发说明和快捷键汇总
     *.html            # 29 个独立工具，每个可单独运行
-  fix_css.ps1         # 工具样式修复脚本
-  create_repos.ps1    # GitHub 仓库批量创建脚本
-  temp_transform.py   # 项目迁移/转换辅助脚本
 ```
 
 ## 技术栈
