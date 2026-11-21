@@ -513,7 +513,10 @@ IP：192.168.1.1
       regex = new RegExp(pattern, flags);
     } catch(e) {
       regexInput.classList.add('invalid');
-      matchResults.innerHTML = '<div class="error-msg">❌ 正则语法错误：' + e.message + '</div>';
+      var errorNode = document.createElement('div');
+      errorNode.className = 'error-msg';
+      errorNode.textContent = '❌ 正则语法错误：' + e.message;
+      matchResults.replaceChildren(errorNode);
       matchCount.textContent = '0';
       statMatches.textContent = '0';
       statGroups.textContent = '0';
