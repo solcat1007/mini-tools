@@ -572,12 +572,18 @@ textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(ori
     var hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
     valHsl.value = 'hsl(' + hsl.h + ', ' + hsl.s + '%, ' + hsl.l + '%)';
 
-    // 更新右侧信息
-    infoBlock.innerHTML =
-      '<span class="key">HEX</span>：' + hex + '<br>' +
-      '<span class="key">RGB</span>：(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ')<br>' +
-      '<span class="key">HSL</span>：(' + hsl.h + '&deg;, ' + hsl.s + '%, ' + hsl.l + '%)<br>' +
-      '<span class="key">亮度</span>：' + (hsl.l > 50 ? '浅色' : '深色');
+    // 使用 DOM 文本节点渲染，避免把用户输入的 HEX 值拼接进 HTML
+    infoBlock.replaceChildren();
+    function addInfoRow(label, value) {
+      var key = document.createElement('span');
+      key.className = 'key';
+      key.textContent = label;
+      infoBlock.append(key, document.createTextNode('：' + value), document.createElement('br'));
+    }
+    addInfoRow('HEX', hex);
+    addInfoRow('RGB', '(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ')');
+    addInfoRow('HSL', '(' + hsl.h + '°, ' + hsl.s + '%, ' + hsl.l + '%)');
+    addInfoRow('亮度', hsl.l > 50 ? '浅色' : '深色');
   }
 
   // ========== 原生取色器 ==========
