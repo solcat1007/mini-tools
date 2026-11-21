@@ -65,9 +65,25 @@ function convertAll(){
     ['小写',lower],['大写',upper],['首字母大写',sentence],['单词首字母大写',title],
     ['camelCase',camel],['PascalCase',pascal],['snake_case',snake],['UPPER_SNAKE',upperSnake],['kebab-case',kebab]
   ];
-  let h='';
-  for(let[l,v]of items)h+='<div class="result-item"><span class="label">'+l+'</span><span class="value" title="'+escapeHTML(v)+'">'+escapeHTML(v)+'</span><button class="copy-sm" onclick="copyText(&quot;'+escapeAttr(v)+'&quot;)">复制</button></div>';
-  document.getElementById('results').innerHTML=h;
+  const results=document.getElementById('results');
+  results.replaceChildren();
+  for (const [label,value] of items) {
+    const row=document.createElement('div');
+    row.className='result-item';
+    const labelNode=document.createElement('span');
+    labelNode.className='label';
+    labelNode.textContent=label;
+    const valueNode=document.createElement('span');
+    valueNode.className='value';
+    valueNode.title=value;
+    valueNode.textContent=value;
+    const copyButton=document.createElement('button');
+    copyButton.className='copy-sm';
+    copyButton.textContent='复制';
+    copyButton.addEventListener('click',function(){copyText(value);});
+    row.append(labelNode,valueNode,copyButton);
+    results.appendChild(row);
+  }
 }
 
 function toCamel(s){return s.replace(/[_\-\s]+(.)?/g,(_,c)=>c?c.toUpperCase():'').replace(/^./,c=>c.toLowerCase())}
