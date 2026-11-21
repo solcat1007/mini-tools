@@ -787,13 +787,31 @@ textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(ori
       else if (i === currentPhaseIndex && !isRunning) { statusText = '⏸ 暂停'; statusClass = 'running'; }
       else { statusText = '○ 待开始'; statusClass = 'pending'; }
 
-      div.innerHTML =
-        '<span class="phase-icon">' + (phase.done ? '✅' : (i === currentPhaseIndex ? '▶️' : '○')) + '</span>' +
-        '<span class="phase-info"><span class="phase-name">' + phase.name + '</span><br>' +
-        '<span class="phase-time">' + phase.minutes + ' 分钟</span></span>' +
-        '<span class="phase-status ' + statusClass + '">' + statusText + '</span>' +
-        '<button class="btn btn-sm" onclick="removePhase(' + i + ')" title="移除">✕</button>';
+      var iconNode = document.createElement('span');
+      iconNode.className = 'phase-icon';
+      iconNode.textContent = phase.done ? '✅' : (i === currentPhaseIndex ? '▶️' : '○');
 
+      var infoNode = document.createElement('span');
+      infoNode.className = 'phase-info';
+      var nameNode = document.createElement('span');
+      nameNode.className = 'phase-name';
+      nameNode.textContent = phase.name;
+      var timeNode = document.createElement('span');
+      timeNode.className = 'phase-time';
+      timeNode.textContent = phase.minutes + ' 分钟';
+      infoNode.append(nameNode, document.createElement('br'), timeNode);
+
+      var statusNode = document.createElement('span');
+      statusNode.className = 'phase-status ' + statusClass;
+      statusNode.textContent = statusText;
+
+      var removeButton = document.createElement('button');
+      removeButton.className = 'btn btn-sm';
+      removeButton.title = '移除';
+      removeButton.textContent = '✕';
+      removeButton.addEventListener('click', function(){ removePhase(i); });
+
+      div.append(iconNode, infoNode, statusNode, removeButton);
       phaseList.appendChild(div);
     });
   }
