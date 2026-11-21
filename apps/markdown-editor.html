@@ -352,8 +352,8 @@ textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(ori
     function safeMarkdownUrl(raw, isImage) {
       var value = String(raw).trim();
       var normalized = value.replace(/[\u0000-\u0020\u007f]/g, '').toLowerCase();
-      if (normalized.indexOf('\\\\') !== -1) return '#';
-      if (/^https?:\\/\\//i.test(normalized)) return value;
+      if (value.indexOf('\\') !== -1) return '#';
+      if (/^https?:\/\//i.test(normalized)) return value;
       if (!isImage && /^mailto:/i.test(normalized)) return value;
       if (!/^[a-z][a-z0-9+.-]*:/i.test(normalized) && normalized.slice(0, 2) !== '//') return value;
       return '#';
@@ -364,13 +364,13 @@ textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(ori
 
     /* 行内元素解析 */
     function parseInline(text) {
-      text = text.replace(/!\\[([^\\]]*)\\]\\(([^)]+)\\)/g, function(_, alt, url) {
+      text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function(_, alt, url) {
         return '<img src="' + escapeAttribute(safeMarkdownUrl(url, true)) + '" alt="' + escapeAttribute(alt) + '">';
       });
-      text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, function(_, label, url) {
+      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, label, url) {
         return '<a href="' + escapeAttribute(safeMarkdownUrl(url, false)) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
       });
-      text = text.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+      text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
       text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
       text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
       text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
