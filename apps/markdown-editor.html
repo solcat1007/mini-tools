@@ -388,7 +388,8 @@ textarea:focus, input:focus, select:focus { border-width: 2px; padding: calc(ori
           inCodeBlock = true; codeBlockContent = [];
           codeBlockLang = line.slice(3).trim();
         } else {
-          result.push('<pre><code' + (codeBlockLang ? ' class="language-' + codeBlockLang + '"' : '') + '>' + codeBlockContent.join('\n') + '</code></pre>');
+          var safeCodeLang = codeBlockLang.replace(/[^a-zA-Z0-9_+-]/g, '');
+          result.push('<pre><code' + (safeCodeLang ? ' class="language-' + safeCodeLang + '"' : '') + '>' + codeBlockContent.join('\n') + '</code></pre>');
           inCodeBlock = false; codeBlockLang = '';
         }
         continue;
